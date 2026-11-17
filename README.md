@@ -1,41 +1,23 @@
-# Shalom Bíblia Inteligente — projeto inicial
+# Shalom Bíblia Inteligente
 
-Este repositório contém o **código-fonte inicial** de um plugin em desenvolvimento para o SPresenter no Windows. Ainda não é um pacote instalável pronto.
+Plugin em desenvolvimento para **SPresenter 0.3.50 no Windows**.
 
-## O que já está incluído
-- Observador do evento `live` do SPresenter.
-- Leitura das camadas ao vivo e extração defensiva de texto/referências bíblicas.
-- Classificação temática inicial por palavras-chave (fallback local; ainda não usa IA generativa).
-- Pesquisa de fotos e vídeos pela API do Pexels.
-- Proteção contra reprocessamento do mesmo versículo.
+## Objetivo
+Identificar o texto bíblico que entrou ao vivo, interpretar seu tema e selecionar imagens/vídeos adequados para a camada **Fundo**, sem substituir a camada do versículo.
 
-## O que ainda falta
-A aplicação automática do fundo está intencionalmente desativada até confirmar o formato de `Presentation` e o índice da camada de fundo na versão do SPresenter instalada. Também faltam interface de configuração, integração com um provedor de IA, build empacotado e testes no Windows.
+## Estado da versão 0.2.0
+- Manifesto alinhado ao formato oficial: `main: dist/code.js` e compatibilidade mínima 0.3.50.
+- Build do código com esbuild e script de empacotamento ZIP.
+- Leitura de eventos live e tentativa inicial de identificar referências bíblicas.
+- Classificação temática local por palavras-chave.
+- A aplicação automática de mídia permanece protegida até validar a estrutura de Presentation e confirmar o índice da camada Fundo no computador de destino.
 
-**Não instale durante um culto ao vivo.** Este projeto é um starter técnico e precisa ser validado com a versão exata do SPresenter.
+## Instalação para desenvolvimento
+1. Instale Node.js 18 ou superior.
+2. Execute `npm install`.
+3. Execute `npm run build`.
+4. No SPresenter, abra **Settings → Plugins → Load folder (dev)** e selecione a pasta do projeto.
 
-## Requisitos
-- Windows 10/11
-- Node.js LTS
-- SPresenter compatível com plugins
-- SDK oficial `@spresenter/plugin-sdk`
-- Chave de API Pexels (opcional)
+Para gerar o ZIP: `npm run package`.
 
-## Desenvolvimento
-```bash
-npm install
-npm run build
-```
-
-Configure a chave Pexels por mecanismo local seguro; nunca a coloque no código nem no Git.
-
-## Estrutura
-- `src/code.ts`: integração inicial com eventos do SPresenter.
-- `src/theme.ts`: classificação temática local.
-- `src/media.ts`: pesquisa de fotos e vídeos no Pexels.
-- `docs/INTEGRACAO-SPRESENTER.md`: pendências para integração da projeção.
-
-## Referências
-- SDK: https://github.com/sonext-software/spresenter-plugin
-- API: https://github.com/sonext-software/spresenter-plugin/blob/master/docs/api-reference.md
-- Projeto comunitário de referência: https://github.com/zosmalabs/fundos-por-culto-spresenter
+**Atenção:** ainda é uma versão de desenvolvimento. Faça os testes com uma saída de teste, nunca durante a projeção de um culto. Não coloque chaves de API no Git.
