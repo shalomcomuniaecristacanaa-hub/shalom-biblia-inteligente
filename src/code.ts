@@ -1,4 +1,3 @@
-import "@spresenter/plugin-sdk/code";
 import { classifyTheme } from "./theme";
 import { searchPhotos, searchVideos } from "./media";
 
