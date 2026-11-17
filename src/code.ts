@@ -22,7 +22,7 @@ function collectStrings(value: unknown, out: string[] = [], depth = 0): string[]
 }
 
 function findBibleReference(text: string): string | null {
-  const pattern = /\\b(?:Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|1\\s?Samuel|2\\s?Samuel|1\\s?Reis|2\\s?Reis|Salmos?|Provérbios|Eclesiastes|Isaías|Jeremias|Mateus|Marcos|Lucas|João|Atos|Romanos|1\\s?Coríntios|2\\s?Coríntios|Gálatas|Efésios|Filipenses|Colossenses|Hebreus|Tiago|1\\s?Pedro|2\\s?Pedro|Apocalipse)\\s+\\d{1,3}(?::\\d{1,3}(?:-\\d{1,3})?)?/i;
+  const pattern = /\b(?:Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|1\s?Samuel|2\s?Samuel|1\s?Reis|2\s?Reis|Salmos?|Provérbios|Eclesiastes|Isaías|Jeremias|Mateus|Marcos|Lucas|João|Atos|Romanos|1\s?Coríntios|2\s?Coríntios|Gálatas|Efésios|Filipenses|Colossenses|Hebreus|Tiago|1\s?Pedro|2\s?Pedro|Apocalipse)\s+\d{1,3}(?::\d{1,3}(?:-\d{1,3})?)?/i;
   return text.match(pattern)?.[0] ?? null;
 }
 
@@ -32,7 +32,7 @@ async function analyzeOutput(output: string) {
   try {
     const layers = await spresenter.live.read(output);
     const strings = collectStrings(layers);
-    const fullText = strings.join("\\n");
+    const fullText = strings.join("\n");
     const reference = findBibleReference(fullText);
     if (!reference) return;
 
