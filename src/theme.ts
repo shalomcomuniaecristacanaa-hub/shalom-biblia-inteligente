@@ -19,9 +19,9 @@ const rules: Array<[string, string[], string, string]> = [
 ];
 
 export function classifyTheme(text: string): ThemeResult {
-  const normalized = text.normalize("NFD").replace(/\\p{Diacritic}/gu, "").toLowerCase();
+  const normalized = text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
   const found = rules.find(([, words]) => words.some(w =>
-    normalized.includes(w.normalize("NFD").replace(/\\p{Diacritic}/gu, "").toLowerCase())
+    normalized.includes(w.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase())
   ));
   const [theme, mood, query] = found
     ? [found[0], found[2], found[3]]
