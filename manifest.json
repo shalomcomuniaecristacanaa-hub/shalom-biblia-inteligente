@@ -1,18 +1,22 @@
 {
   "id": "br.shalom.biblia-inteligente",
   "name": "Shalom Bíblia Inteligente",
-  "version": "0.2.0",
-  "description": "Analisa textos bíblicos ao vivo e prepara fundos visuais para o SPresenter.",
+  "version": "0.3.1",
+  "description": "Biblioteca de versículos e assistente visual integrado ao SPresenter.",
   "author": "Shalom Comunidade Cristã",
   "minAppVersion": "0.3.50",
   "sdk": "0.3.50",
   "main": "dist/code.js",
+  "ui": "dist/ui/index.html",
   "permissions": [
     "outputs:read",
     "live:read",
     "live:write",
     "assets:write",
     "net:connect"
+  ],
+  "panels": [
+    { "id": "main", "title": "Shalom Bíblia", "icon": "book-open" }
   ],
   "background": true
 }
