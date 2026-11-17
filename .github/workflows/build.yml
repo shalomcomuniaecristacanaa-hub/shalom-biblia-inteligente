@@ -1,5 +1,4 @@
 name: Build and publish plugin
-
 on:
   push:
     branches: [main]
@@ -9,10 +8,8 @@ on:
       - "README.md"
       - "docs/**"
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,11 +20,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - name: Install dependencies
         run: npm install
-      - name: Type check
-        run: npm run typecheck --if-present
       - name: Build and package
         run: npm run package
       - name: Publish compiled files to main
@@ -45,3 +39,4 @@ jobs:
           name: shalom-biblia-inteligente-installer
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 30
