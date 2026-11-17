@@ -1,36 +1,123 @@
-import { useEffect, useMemo, useState } from 'react';
-import { onMessage, postMessage } from '@spresenter/plugin-sdk/ui';
+import { useEffect, useMemo, useState } from "react";
+import { onMessage, postMessage } from "@spresenter/plugin-sdk/ui";
 
-type Verse = { id:string; reference:string; text:string; theme:string; notes:string };
-type Status = { enabled:boolean; mode:'automatic'|'manual'; detected?:string; outputCount?:number };
-export function App(){
- const [verses,setVerses]=useState<Verse[]>([]);
- const [reference,setReference]=useState('João 3:16');
- const [text,setText]=useState('');
- const [theme,setTheme]=useState('');
- const [notes,setNotes]=useState('');
- const [editing,setEditing]=useState<string|null>(null);
- const [status,setStatus]=useState<Status>({enabled:false,mode:'automatic'});
- const [tab,setTab]=useState<'verses'|'automation'>('verses');
- const [query,setQuery]=useState('');
- const filtered=useMemo(()=>verses.filter(v=>(v.reference+' '+v.text+' '+v.theme).toLowerCase().includes(query.toLowerCase())),[verses,query]);
- useEffect(()=>{const off=onMessage(raw=>{const m=raw as any;if(m.type==='state'){setVerses(m.verses||[]);setStatus(m.status||{enabled:false,mode:'automatic'});}if(m.type==='verses')setVerses(m.verses||[]);if(m.type==='status')setStatus(m.status);});postMessage({type:'init'});return off;},[]);
- function save(){if(!reference.trim()||!text.trim())return;const v={id:editing||Date.now().toString(36),reference:reference.trim(),text:text.trim(),theme:theme.trim(),notes:notes.trim()};postMessage({type:'save-verse',verse:v});setEditing(null);setReference('');setText('');setTheme('');setNotes('');}
- function edit(v:Verse){setEditing(v.id);setReference(v.reference);setText(v.text);setTheme(v.theme);setNotes(v.notes);window.scrollTo({top:0,behavior:'smooth'});}
- function cancel(){setEditing(null);setReference('');setText('');setTheme('');setNotes('');}
- return <main>
-  <header><div className="mark">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className={status.enabled?'online':''}/></header>
-  <section className="hero"><small>ASSISTENTE DE PROJEÇÃO</small><h1>Prepare a Palavra.<br/><em>Inspire vidas.</em></h1><p>Organize os versículos e prepare fundos visuais para a ministração.</p></section>
-  <nav><button className={tab==='verses'?'active':''} onClick={()=>setTab('verses')}>✧ Versículos</button><button className={tab==='automation'?'active':''} onClick={()=>setTab('automation')}>◉ Automação</button></nav>
-  {tab==='verses'?<><section className="card"><div className="section-title"><div><small>BIBLIOTECA DA MINISTRAÇÃO</small><h2>{editing?'Editar versículo':'Cadastrar versículo'}</h2></div><span className="count">{verses.length} salvos</span></div>
-   <label>Referência bíblica<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="Ex.: Salmos 23:1"/></label>
-   <label>Texto do versículo<textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Digite ou cole o texto bíblico..." rows={4}/></label>
-   <label>Tema / palavra-chave<input value={theme} onChange={e=>setTheme(e.target.value)} placeholder="Ex.: confiança, fé, esperança"/></label>
-   <label>Observações (opcional)<textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Anotações para a equipe..." rows={2}/></label>
-   <div className="actions"><button className="primary" onClick={save} disabled={!reference.trim()||!text.trim()}>{editing?'Salvar alterações':'＋ Adicionar à biblioteca'}</button>{editing&&<button className="ghost" onClick={cancel}>Cancelar</button>}</div>
-  </section><section className="library"><div className="section-title"><div><small>SEUS TEXTOS</small><h2>Versículos cadastrados</h2></div></div><input className="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="⌕ Buscar referência, texto ou tema..."/>
-   {filtered.length===0?<div className="empty">Sua biblioteca está vazia.<br/>Cadastre os versículos que serão usados no culto.</div>:filtered.map(v=><article className="verse" key={v.id}><div className="verse-head"><strong>{v.reference}</strong><div><button onClick={()=>edit(v)}>Editar</button><button className="danger" onClick={()=>postMessage({type:'delete-verse',id:v.id})}>Excluir</button></div></div><p>{v.text}</p>{v.theme&&<span className="tag">{v.theme}</span>}{v.notes&&<small className="notes">{v.notes}</small>}</article>)}
-  </section></>:<section className="card"><small>CONTROLE INTELIGENTE</small><h2>Automação de fundos</h2><p className="muted">O painel acompanha o conteúdo ao vivo e pode relacioná-lo com os versículos cadastrados.</p><div className="switch-row"><div><strong>Ativar análise automática</strong><small>Detectar referências exibidas no SPresenter</small></div><input type="checkbox" checked={status.enabled} onChange={e=>postMessage({type:'set-enabled',enabled:e.target.checked})}/></div><label>Modo de operação<select value={status.mode} onChange={e=>postMessage({type:'set-mode',mode:e.target.value})}><option value="automatic">Automático</option><option value="manual">Manual</option></select></label><div className="status"><span className={status.enabled?'dot green':'dot'}/>{status.enabled?'Monitoramento ativado':'Monitoramento pausado'}</div><p className="muted">A aplicação de mídia na camada Fundo permanece protegida até validar o formato de apresentação e os recursos de mídia da sua versão do SPresenter.</p></section>}
-  <footer>SHALOM COMUNIDADE CRISTÃ <span>•</span> v0.3.0</footer>
- </main>;
+type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string };
+type Output = { index: number; name?: string };
+type Layer = { index: number; name?: string };
+const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "" });
+
+export function App() {
+  const [verses, setVerses] = useState<Verse[]>([]);
+  const [outputs, setOutputs] = useState<Output[]>([]);
+  const [layers, setLayers] = useState<Layer[]>([]);
+  const [verse, setVerse] = useState<Verse>(blank());
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState("");
+  const [group, setGroup] = useState("Todas");
+  const [output, setOutput] = useState("0");
+  const [contentLayer, setContentLayer] = useState("0");
+  const [backgroundLayer, setBackgroundLayer] = useState("1");
+  const [captureLayer, setCaptureLayer] = useState("0");
+  const [tab, setTab] = useState<"favorites" | "add" | "settings">("favorites");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const off = onMessage(raw => {
+      const m = raw as any;
+      if (m.type === "state") {
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []);
+        const ls = (m.layers ?? []) as Layer[];
+        const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
+        const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
+        if (content) { setContentLayer(String(content.index)); setCaptureLayer(String(content.index)); }
+        if (bg) setBackgroundLayer(String(bg.index));
+        if ((m.outputs ?? []).length) setOutput(String(m.outputs[0].index));
+      }
+      if (m.type === "captured") {
+        setVerse(v => ({ ...v, reference: m.reference || v.reference, text: m.text || m.raw || v.text }));
+        setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
+      }
+      if (m.type === "presented") setNotice("Apresentado: " + m.reference);
+      if (m.type === "notice" || m.type === "error") setNotice(m.message);
+      if (m.type === "error") setBusy(false);
+      if (m.type === "presented") setBusy(false);
+    });
+    postMessage({ type: "init" });
+    return off;
+  }, []);
+
+  const groups = useMemo(() => ["Todas", ...Array.from(new Set(verses.map(v => v.group || "Geral")))], [verses]);
+  const filtered = useMemo(() => verses.filter(v =>
+    (group === "Todas" || (v.group || "Geral") === group) &&
+    (v.reference + " " + v.text + " " + v.theme).toLowerCase().includes(query.toLowerCase())
+  ), [verses, group, query]);
+
+  function save() {
+    if (!verse.reference.trim() || !verse.text.trim()) return;
+    postMessage({ type: "save-verse", verse: { ...verse, id: verse.id || Date.now().toString(36), group: verse.group.trim() || "Geral" } });
+    setVerse(blank()); setEditing(false); setTab("favorites");
+  }
+  function edit(v: Verse) { setVerse({ ...v }); setEditing(true); setTab("add"); }
+  function present(v: Verse) {
+    setBusy(true);
+    postMessage({ type: "present", verse: v, output, contentLayer, backgroundLayer });
+  }
+  function move(delta: number, current: Verse) {
+    const index = filtered.findIndex(v => v.id === current.id);
+    const next = filtered[index + delta];
+    if (next) present(next);
+  }
+  const layerOptions = layers.map(l => <option key={l.index} value={String(l.index)}>{l.name || "Camada " + l.index} (#{l.index})</option>);
+
+  return <main>
+    <header><div className="brand">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className="online" /></header>
+    <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
+    <nav>
+      <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
+      <button className={tab === "add" ? "active" : ""} onClick={() => { setTab("add"); if (!verse.id) setVerse(blank()); }}>＋ Adicionar</button>
+      <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configuração</button>
+    </nav>
+    {notice && <div className="notice" onClick={() => setNotice("")}>{notice}<button>×</button></div>}
+    {tab === "favorites" && <>
+      <section className="card livebar">
+        <div><small>DESTINO DA PROJEÇÃO</small><strong>Saída {output}</strong></div>
+        <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
+        <div className="smallrow"><span>Conteúdo: {layers.find(l => String(l.index) === contentLayer)?.name || contentLayer}</span><span>Fundo: {layers.find(l => String(l.index) === backgroundLayer)?.name || backgroundLayer}</span></div>
+      </section>
+      <section className="library">
+        <div className="section-title"><div><small>ATALHOS SALVOS</small><h2>Favoritos da ministração</h2></div><span className="count">{verses.length}</span></div>
+        <input className="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar referência, texto ou tema..." />
+        <div className="groupchips">{groups.map(g => <button key={g} className={group === g ? "chosen" : ""} onClick={() => setGroup(g)}>{g}</button>)}</div>
+        {filtered.length === 0 ? <div className="empty">Nenhum versículo salvo. Use “Adicionar” para criar sua primeira lista.</div> : filtered.map(v =>
+          <article className="verse" key={v.id}>
+            <div className="verse-head"><div><strong>{v.reference}</strong><small>{v.group || "Geral"}</small></div><div className="verse-actions"><button className="go" onClick={() => present(v)}>▶ APRESENTAR</button><button onClick={() => edit(v)}>Editar</button><button className="danger" onClick={() => postMessage({ type: "delete-verse", id: v.id })}>Excluir</button></div></div>
+            <p>{v.text}</p>{v.theme && <span className="tag">{v.theme}</span>}
+            <div className="sequence"><button onClick={() => move(-1, v)}>← Anterior</button><button onClick={() => move(1, v)}>Próximo →</button></div>
+          </article>
+        )}
+      </section>
+      <button className="wide ghost" onClick={() => postMessage({ type: "clear", output, contentLayer, backgroundLayer })}>Limpar Conteúdo e Fundo</button>
+    </>}
+    {tab === "add" && <section className="card">
+      <div className="section-title"><div><small>BIBLIOTECA PESSOAL</small><h2>{editing ? "Editar favorito" : "Adicionar versículo"}</h2></div></div>
+      <div className="importbox"><strong>Importar da Bíblia do SPresenter</strong><p>Abra a Bíblia nativa, coloque o versículo desejado na camada Conteúdo e importe o que estiver ao vivo.</p><div className="actions"><button className="ghost" onClick={() => postMessage({ type: "open-bible" })}>Abrir Bíblia do SPresenter</button><button className="primary" onClick={() => postMessage({ type: "capture-live", output, captureLayer })}>Importar do Conteúdo</button></div></div>
+      <label>Referência bíblica<input value={verse.reference} onChange={e => setVerse({ ...verse, reference: e.target.value })} placeholder="Ex.: João 3:16" /></label>
+      <label>Texto do versículo<textarea rows={5} value={verse.text} onChange={e => setVerse({ ...verse, text: e.target.value })} placeholder="Cole ou digite o texto bíblico..." /></label>
+      <div className="twocol"><label>Lista / categoria<input value={verse.group} onChange={e => setVerse({ ...verse, group: e.target.value })} placeholder="Ex.: Culto de domingo" /></label><label>Tema<input value={verse.theme} onChange={e => setVerse({ ...verse, theme: e.target.value })} placeholder="Ex.: Fé, esperança" /></label></div>
+      <label>Imagem de fundo (URL opcional)<input value={verse.background} onChange={e => setVerse({ ...verse, background: e.target.value })} placeholder="https://... (imagem panorâmica)" /></label>
+      <p className="hint">Sem URL, será usado um fundo abstrato. Use uma imagem pública em HTTPS para personalizar.</p>
+      <div className="actions"><button className="primary" disabled={!verse.reference.trim() || !verse.text.trim()} onClick={save}>{editing ? "Salvar alterações" : "Salvar nos favoritos"}</button><button className="ghost" onClick={() => { setVerse(blank()); setEditing(false); setTab("favorites"); }}>Cancelar</button></div>
+    </section>}
+    {tab === "settings" && <section className="card">
+      <small>INTEGRAÇÃO SPRESENTER</small><h2>Camadas e saída</h2>
+      <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
+      <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
+      <label>Camada Fundo<select value={backgroundLayer} onChange={e => setBackgroundLayer(e.target.value)}>{layerOptions}</select></label>
+      <label>Importar texto da camada<select value={captureLayer} onChange={e => setCaptureLayer(e.target.value)}>{layerOptions}</select></label>
+      <p className="hint">A seleção da Bíblia nativa é importada após o versículo ser colocado ao vivo. A API pública documentada não expõe leitura direta da lista interna de traduções e versículos.</p>
+      <button className="primary" onClick={() => postMessage({ type: "open-bible" })}>Abrir painel Bíblia</button>
+    </section>}
+    <footer>SHALOM COMUNIDADE CRISTÃ <span>•</span> v0.4.0</footer>
+  </main>;
 }
