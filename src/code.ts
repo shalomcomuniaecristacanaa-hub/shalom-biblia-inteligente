@@ -1,5 +1,3 @@
-import "@spresenter/plugin-sdk/code";
-
 type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string };
 type UiMessage = { type: string; [key: string]: any };
 
