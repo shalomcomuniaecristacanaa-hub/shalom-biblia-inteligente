@@ -1,24 +1,24 @@
-# Integração final com o SPresenter
+# Integração com SPresenter 0.3.50
 
-## API a validar na instalação
-A documentação pública do SDK descreve eventos de live, leitura de camadas, importação de assets e armazenamento. Os nomes e assinaturas usados neste starter precisam ser conferidos contra a versão efetivamente instalada.
+## Camada de destino
+O usuário confirmou que a apresentação possui uma camada separada chamada **Fundo**. O plugin deverá localizar essa camada pelo nome (ou permitir seleção manual na interface), e preservar todas as outras camadas, especialmente a que contém o versículo.
 
-## Etapa obrigatória antes de ativar projeção automática
-Precisamos inspecionar uma apresentação real retornada por `live.read()` na versão instalada e identificar:
-1. Qual índice contém a Bíblia.
-2. Qual índice é a camada de fundo.
-3. Qual estrutura de `Presentation` representa um asset de imagem/vídeo.
-4. Como tema e mídia são resolvidos em cada saída.
+## API confirmada na documentação do SDK
+- `spresenter.on('live', callback)` notifica que algo mudou; o callback deve reler os dados.
+- `spresenter.outputs.list()` lista saídas.
+- `spresenter.layers.list()` lista camadas com índice e nome.
+- `spresenter.live.read(output)` lê as apresentações por camada.
+- `spresenter.live.apply(output, layer, presentation)` substitui a apresentação da camada indicada.
+- `spresenter.assets.createFile({ filename, sourceUrl, title, type })` pode importar mídia remota para a biblioteca; exige `assets:write` e `net:connect`.
 
-A referência pública menciona `live.apply(output, layer, presentation)`, mas isso não basta para adivinhar o objeto `presentation`. Por segurança, `applyBackgroundAsset` falha de propósito em vez de alterar uma camada incorreta durante um culto.
+## Proteção obrigatória
+Nunca escolher a camada do versículo como destino. Antes de escrever, validar que o índice selecionado corresponde a **Fundo** e registrar o estado anterior. Se o nome/índice não puder ser confirmado, não aplicar nada.
 
-## Importação e segurança
-- A integração com Pexels depende de chave configurada localmente.
-- Nunca grave tokens no repositório.
-- Mostre autor/crédito quando exigido pelos termos do provedor.
-- Não use Google Images como fonte de download automatizado.
+## Pendente
+A documentação pública consultada não foi suficiente para confirmar a estrutura completa do objeto `Presentation` para imagens e vídeos. Por isso a projeção automática continua desativada até testar com um asset real e confirmar o comportamento na instalação 0.3.50.
 
 ## Referências
-- SDK: https://github.com/sonext-software/spresenter-plugin
-- API: https://github.com/sonext-software/spresenter-plugin/blob/master/docs/api-reference.md
-- Projeto comunitário de referência: https://github.com/zosmalabs/fundos-por-culto-spresenter
+- https://github.com/sonext-software/spresenter-plugin/blob/master/docs/api-reference.md
+- https://github.com/sonext-software/spresenter-plugin/blob/master/docs/manifest.md
+- https://github.com/sonext-software/spresenter-plugin/blob/master/docs/permissions.md
+- https://github.com/sonext-software/spresenter-plugin/blob/master/docs/packaging.md
