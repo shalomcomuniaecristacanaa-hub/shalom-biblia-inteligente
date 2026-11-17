@@ -1,0 +1,14 @@
+{
+  "id": "br.shalom.biblia-inteligente",
+  "name": "Shalom Bíblia Inteligente",
+  "version": "0.1.0",
+  "description": "Identifica o tema do texto bíblico ao vivo e pesquisa fundos de imagem e vídeo.",
+  "author": "Shalom Comunidade Cristã",
+  "background": true,
+  "permissions": [
+    "outputs:read",
+    "live:read",
+    "assets:write",
+    "net:connect"
+  ]
+}
