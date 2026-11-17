@@ -1,15 +1,19 @@
 {
   "name": "shalom-biblia-inteligente",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Starter de plugin SPresenter para classificação temática e pesquisa de mídia bíblica",
+  "description": "Plugin SPresenter: análise temática e seleção segura de fundos bíblicos",
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "esbuild src/code.ts --bundle --platform=browser --format=iife --outfile=dist/code.js --external:@spresenter/plugin-sdk/code",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && node scripts/package.mjs"
   },
   "dependencies": {
-    "@spresenter/plugin-sdk": "latest"
+    "@spresenter/plugin-sdk": "0.3.50"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3",
+    "adm-zip": "^0.5.16"
   }
 }
