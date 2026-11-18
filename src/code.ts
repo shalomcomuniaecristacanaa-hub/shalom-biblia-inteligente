@@ -151,13 +151,13 @@ async function captureLive(msg: UiMessage) {
   const reference = book && chapter && verseNumber ? `${book} ${chapter}:${verseNumber}` : "";
   const metadata = new Set([book, version, ...numbers]);
   const textCandidates = [...new Set(cleanLines.filter(value => !metadata.has(value) && !versionPattern.test(value) && !/^\d{1,3}$/.test(value)))];
-  // Os campos do modelo podem expor o mesmo conteúdo em mais de uma propriedade.
-  // Deduplica textos idênticos e não bloqueia a importação por haver mais de um
-  // campo textual: a estrutura props pode conter mais de um trecho da passagem.
+  // No formato observado da Bíblia do SPresenter, o primeiro campo de texto
+  // após os metadados é o versículo selecionado; campos seguintes podem ser
+  // prévia/continuação da passagem e não devem ser concatenados.
   if (!textCandidates.length) {
     throw new Error("Não consegui localizar o texto bíblico nos dados da camada selecionada. Confira se o versículo está ao vivo na camada escolhida.");
   }
-  const text = textCandidates.join("\\n").slice(0, 3000);
+  const text = textCandidates[0].slice(0, 3000);
   spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3000) });
 }
 
