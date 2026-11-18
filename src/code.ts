@@ -116,7 +116,7 @@ async function captureLive(msg: UiMessage) {
   const presentation = live?.[layer];
   const ignored = /^(?:Padrão\s*[—-]\s*Bíblia|\{livro\}\s+\{capitulo\}:\{versiculo\})$/i;
   const strings = [...new Set(collectText(presentation))]
-    .map(s => s.trim())
+    .map(s => s.replace(/Padrão\\s*[—-]\\s*Bíblia/gi, "").replace(/\\{livro\\}\\s*\\{capitulo\\}:\\{versiculo\\}/gi, "").trim())
     .filter(s => s && !ignored.test(s) && !/^\{(?:livro|capitulo|versiculo)\}/i.test(s));
   const joined = strings.join(" ").replace(/\s+/g, " ").trim();
   const bookPattern = "(?:Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|1\\s*Samuel|2\\s*Samuel|1\\s*Reis|2\\s*Reis|1\\s*Crônicas|2\\s*Crônicas|Esdras|Neemias|Ester|Jó|Salmos?|Provérbios|Eclesiastes|Cânticos|Isaías|Jeremias|Lamentações|Ezequiel|Daniel|Oséias|Joel|Amós|Obadias|Jonas|Miquéias|Naum|Habacuque|Sofonias|Ageu|Zacarias|Malaquias|Mateus|Marcos|Lucas|João|Atos|Romanos|1\\s*Coríntios|2\\s*Coríntios|Gálatas|Efésios|Filipenses|Colossenses|1\\s*Tessalonicenses|2\\s*Tessalonicenses|1\\s*Timóteo|2\\s*Timóteo|Tito|Filemom|Hebreus|Tiago|1\\s*Pedro|2\\s*Pedro|1\\s*João|2\\s*João|3\\s*João|Judas|Apocalipse)";
