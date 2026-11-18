@@ -36,10 +36,10 @@ export function App() {
         if ((m.outputs ?? []).length) setOutput(String(m.outputs[0].index));
       }
       if (m.type === "captured") {
-        setVerse(v => ({ ...v, reference: m.reference || v.reference, book: m.book || v.book || "", text: m.text || m.raw || v.text }));
+        setVerse(v => ({ ...v, reference: m.reference || v.reference, book: m.book || v.book || "", text: m.text || v.text }));
         setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
       }
-      if (m.type === "presented") setNotice("Apresentado: " + m.reference);
+      if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + m.reference);
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
       if (m.type === "error") setBusy(false);
       if (m.type === "presented") setBusy(false);
