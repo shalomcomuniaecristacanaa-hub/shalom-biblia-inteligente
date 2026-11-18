@@ -19,32 +19,41 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install dependencies
         run: npm install
-      - name: Build and package
-        run: npm run package
-      - name: Publish compiled files to main
+      - name: Build and publish latest main
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist release
-          if ! git diff --cached --quiet; then
+
+          for attempt in 1 2 3; do
+            echo "Build/publish attempt $attempt"
+            git fetch origin main
+            git reset --hard origin/main
+            npm run package
+
+            git add dist release
+            if git diff --cached --quiet; then
+              echo "Compiled artifacts are already up to date."
+              exit 0
+            fi
+
             git commit -m "build: publish compiled plugin"
-            for attempt in 1 2 3; do
-              git fetch origin main
-              git rebase origin/main
-              if git push origin HEAD:main; then
-                exit 0
-              fi
-              echo "Push attempt $attempt failed; retrying after fetch/rebase."
-            done
-            echo "Could not publish build artifacts after 3 attempts."
-            exit 1
-          fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            echo "main changed during build; retrying from newest main."
+          done
+
+          echo "Could not publish compiled files after 3 fresh builds."
+          exit 1
       - name: Upload installable ZIP
         uses: actions/upload-artifact@v4
         with:
