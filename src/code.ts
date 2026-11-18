@@ -55,17 +55,19 @@ async function ensureStage(output: string, layer: number, kind: "content" | "bac
   prepared.add(key);
 }
 function normalizeBackgroundSource(source: string): string {
-  let value = String(source ?? "").replace(/[\\u200B-\\u200D\\uFEFF]/g, "").trim();
-  // Aceita também links copiados no formato Markdown: [texto](https://...)
-  const markdown = value.match(/^\\[[^\\]]*\\]\\((https?:\\/\\/[^\\s)]+)\\)$/i);
-  if (markdown) value = markdown[1];
+  let value = String(source ?? "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  // Aceita links simples, com <...> ou copiados no formato Markdown.
+  if (value.startsWith("[") && value.includes("](") && value.endsWith(")")) {
+    const open = value.indexOf("](");
+    value = value.slice(open + 2, -1).trim();
+  }
   if (value.startsWith("<") && value.endsWith(">")) value = value.slice(1, -1).trim();
   return value;
 }
 async function resolveBackground(source: string): Promise<string> {
   const value = normalizeBackgroundSource(source);
   if (!value) return "";
-  if (/^data:image\\/(?:png|jpeg|webp|gif);base64,/i.test(value)) return value;
+  if (/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(value)) return value;
   let parsed: URL;
   try {
     parsed = new URL(value);
@@ -75,8 +77,7 @@ async function resolveBackground(source: string): Promise<string> {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error("O endereço da imagem precisa começar com http:// ou https://.");
   }
-  // Não usamos fetch aqui: a exibição de imagens em <img> não exige CORS,
-  // ao contrário do download via fetch em muitas WebViews.
+  // A exibição em <img> não exige CORS como um download via fetch.
   return parsed.href;
 }
 function backgroundHtml(source: string, theme: string) {
