@@ -36,7 +36,7 @@ export function App() {
         if ((m.outputs ?? []).length) setOutput(String(m.outputs[0].index));
       }
       if (m.type === "captured") {
-        setVerse(v => ({ ...v, reference: m.reference || v.reference, book: m.book || v.book || "", text: m.text || v.text }));
+        setVerse(v => ({ ...v, reference: m.reference || "", book: m.book || "", text: m.text || "" }));
         setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
       }
       if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + m.reference);
