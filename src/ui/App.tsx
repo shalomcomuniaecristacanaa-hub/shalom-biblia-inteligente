@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { onMessage, postMessage } from "@spresenter/plugin-sdk/ui";
 
-type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string };
+type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
-const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "" });
+const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "", book: "" });
 
 export function App() {
   const [verses, setVerses] = useState<Verse[]>([]);
@@ -21,6 +21,7 @@ export function App() {
   const [tab, setTab] = useState<"favorites" | "add" | "settings">("favorites");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [contextVerse, setContextVerse] = useState<string | null>(null);
 
   useEffect(() => {
     const off = onMessage(raw => {
@@ -90,7 +91,7 @@ export function App() {
         <input className="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar referência, texto ou tema..." />
         <div className="groupchips">{groups.map(g => <button key={g} className={group === g ? "chosen" : ""} onClick={() => setGroup(g)}>{g}</button>)}</div>
         {filtered.length === 0 ? <div className="empty">Nenhum versículo salvo. Use “Adicionar” para criar sua primeira lista.</div> : <div className="verse-list">{filtered.map(v =>
-          <article className="verse" key={v.id} onContextMenu={e => { e.preventDefault(); setNotice("Versículo " + v.reference + ": use as ações Apresentar ou Editar."); }}>
+          <article className="verse" key={v.id} onContextMenu={e => { e.preventDefault(); setContextVerse(v.id); }}>\n            {contextVerse === v.id && <div className="context-menu"><button onClick={() => { edit(v); setContextVerse(null); }}>＋ Adicionar / editar</button><button onClick={() => { present(v); setContextVerse(null); }}>▶ Apresentar</button><button onClick={() => setContextVerse(null)}>Fechar</button></div>}
             <div className="verse-head"><div><strong>{v.reference}</strong><small>{v.group || "Geral"}</small></div><div className="verse-actions"><button className="go" onClick={() => present(v)}>▶ APRESENTAR</button><button onClick={() => edit(v)}>Editar</button><button className="danger" onClick={() => postMessage({ type: "delete-verse", id: v.id })}>Excluir</button></div></div>
             <p>{v.text}</p>{v.theme && <span className="tag">{v.theme}</span>}
             <div className="sequence"><button onClick={() => move(-1, v)}>← Anterior</button><button onClick={() => move(1, v)}>Próximo →</button></div>
@@ -102,7 +103,7 @@ export function App() {
     {tab === "add" && <section className="card">
       <div className="section-title"><div><small>BIBLIOTECA PESSOAL</small><h2>{editing ? "Editar favorito" : "Adicionar versículo"}</h2></div></div>
       <div className="importbox"><strong>Importar da Bíblia do SPresenter</strong><p>Abra a Bíblia nativa, coloque o versículo desejado na camada Conteúdo e importe o que estiver ao vivo.</p><div className="actions"><button className="ghost" onClick={() => postMessage({ type: "open-bible" })}>Abrir Bíblia do SPresenter</button><button className="primary" onClick={() => postMessage({ type: "capture-live", output, captureLayer })}>Importar do Conteúdo</button></div></div>
-      <label>Referência bíblica<input value={verse.reference} onChange={e => setVerse({ ...verse, reference: e.target.value })} placeholder="Ex.: João 3:16" /></label>
+      <label>Livro bíblico<input value={verse.book || ""} onChange={e => setVerse({ ...verse, book: e.target.value })} placeholder="Preenchido automaticamente ao importar" /></label>\n      <label>Referência bíblica<input value={verse.reference} onChange={e => setVerse({ ...verse, reference: e.target.value })} placeholder="Ex.: João 3:16" /></label>
       <label>Texto do versículo<textarea rows={5} value={verse.text} onChange={e => setVerse({ ...verse, text: e.target.value })} placeholder="Cole ou digite o texto bíblico..." /></label>
       <div className="twocol"><label>Lista / categoria<input value={verse.group} onChange={e => setVerse({ ...verse, group: e.target.value })} placeholder="Ex.: Culto de domingo" /></label><label>Tema<input value={verse.theme} onChange={e => setVerse({ ...verse, theme: e.target.value })} placeholder="Ex.: Fé, esperança" /></label></div>
       <label>Imagem de fundo — endereço da internet (opcional)<input value={verse.background.startsWith("data:image/") ? "" : verse.background} onChange={e => setVerse({ ...verse, background: e.target.value })} placeholder="https://... (imagem panorâmica)" /></label>
