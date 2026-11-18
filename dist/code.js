@@ -60,7 +60,7 @@
     prepared.add(key);
   }
   function backgroundHtml(url, theme) {
-    const safeUrl = /^https?:\/\//i.test(url) ? url.replace(/["\\]/g, "") : "";
+    const safeUrl = /^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(url) ? url.replace(/["\\]/g, "") : "";
     const bg = safeUrl ? `background-image:linear-gradient(90deg,rgba(5,8,14,.30),rgba(5,8,14,.48)),url("${safeUrl}");background-size:cover;background-position:center;` : "background:radial-gradient(ellipse at 50% 30%,#56647a 0%,#1c2939 48%,#090e18 100%);";
     return `<div style="position:absolute;inset:0;overflow:hidden;${bg}"><div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.18),transparent 55%);"></div></div>`;
   }
