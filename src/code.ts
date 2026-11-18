@@ -1,4 +1,4 @@
-type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string };
+type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type UiMessage = { type: string; [key: string]: any };
 
 const STORE_KEY = "shalom.verses.v1";
