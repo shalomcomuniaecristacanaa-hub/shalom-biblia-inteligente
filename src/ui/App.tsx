@@ -105,8 +105,19 @@ export function App() {
       <label>Referência bíblica<input value={verse.reference} onChange={e => setVerse({ ...verse, reference: e.target.value })} placeholder="Ex.: João 3:16" /></label>
       <label>Texto do versículo<textarea rows={5} value={verse.text} onChange={e => setVerse({ ...verse, text: e.target.value })} placeholder="Cole ou digite o texto bíblico..." /></label>
       <div className="twocol"><label>Lista / categoria<input value={verse.group} onChange={e => setVerse({ ...verse, group: e.target.value })} placeholder="Ex.: Culto de domingo" /></label><label>Tema<input value={verse.theme} onChange={e => setVerse({ ...verse, theme: e.target.value })} placeholder="Ex.: Fé, esperança" /></label></div>
-      <label>Imagem de fundo (URL opcional)<input value={verse.background} onChange={e => setVerse({ ...verse, background: e.target.value })} placeholder="https://... (imagem panorâmica)" /></label>
-      <p className="hint">Sem URL, será usado um fundo abstrato. Use uma imagem pública em HTTPS para personalizar.</p>
+      <label>Imagem de fundo — endereço da internet (opcional)<input value={verse.background.startsWith("data:image/") ? "" : verse.background} onChange={e => setVerse({ ...verse, background: e.target.value })} placeholder="https://... (imagem panorâmica)" /></label>
+      <label>Ou escolha uma imagem do computador<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif" onChange={e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) { setNotice("Formato não suportado. Escolha JPG, PNG, WEBP ou GIF."); e.target.value = ""; return; }
+        if (file.size > 6 * 1024 * 1024) { setNotice("A imagem local deve ter até 6 MB."); e.target.value = ""; return; }
+        const reader = new FileReader();
+        reader.onload = () => setVerse(v => ({ ...v, background: String(reader.result ?? "") }));
+        reader.onerror = () => setNotice("Não foi possível ler esse arquivo.");
+        reader.readAsDataURL(file);
+      }} /></label>
+      {verse.background.startsWith("data:image/") && <div className="importbox"><strong>Imagem local selecionada</strong><img src={verse.background} alt="Pré-visualização do fundo" style={{display:"block",width:"100%",maxHeight:190,objectFit:"contain",marginTop:10,borderRadius:8}} /><button className="ghost" style={{marginTop:10}} onClick={() => setVerse(v => ({ ...v, background: "" }))}>Remover imagem local</button></div>}
+      <p className="hint">Você pode usar uma URL pública ou selecionar um arquivo do computador. Imagens locais de até 6 MB ficam salvas junto ao favorito. Formatos: JPG, PNG, WEBP e GIF.</p>
       <div className="actions"><button className="primary" disabled={!verse.reference.trim() || !verse.text.trim()} onClick={save}>{editing ? "Salvar alterações" : "Salvar nos favoritos"}</button><button className="ghost" onClick={() => { setVerse(blank()); setEditing(false); setTab("favorites"); }}>Cancelar</button></div>
     </section>}
     {tab === "settings" && <section className="card">
