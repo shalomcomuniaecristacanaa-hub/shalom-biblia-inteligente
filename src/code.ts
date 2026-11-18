@@ -127,35 +127,31 @@ async function captureLive(msg: UiMessage) {
   const layer = Number(msg.captureLayer);
   const live = await spresenter.live.read(output);
   const presentation = live?.[layer];
+  if (!presentation) throw new Error("Não há conteúdo ao vivo na camada escolhida. Coloque somente o versículo desejado ao vivo e tente novamente.");
   const rawStrings = collectText(presentation);
-  // Alguns layouts chegam como um unico campo multilinha; outros chegam em varios campos.
-  const lines = rawStrings.flatMap(value => value
-    .replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n")
-    .split(/\r?\n/)).map(value => value.trim()).filter(Boolean);
+  const lines = rawStrings.flatMap(value => value.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n").split(/\r?\n/))
+    .map(value => value.trim()).filter(Boolean);
   const isPlaceholder = (value: string) => /^\{\s*(?:verso|livro|cap[ií]tulo|vers[ií]culo|vers[aã]o)\s*\}$/i.test(value)
     || /^\{\s*livro\s*\}\s+\{\s*cap[ií]tulo\s*\}:\{\s*vers[ií]culo\s*\}$/i.test(value);
   const cleanLines = lines.map(value => value.replace(/^,?\s*TEXT\s*$/i, "").trim())
     .filter(value => value && !isPlaceholder(value) && !/^Padr[aã]o\s*[—-]\s*B[ií]blia$/i.test(value));
-  const bookNames = [
-    "1 Samuel","2 Samuel","1 Reis","2 Reis","1 Crônicas","2 Crônicas","1 Coríntios","2 Coríntios",
-    "1 Tessalonicenses","2 Tessalonicenses","1 Timóteo","2 Timóteo","1 Pedro","2 Pedro","1 João","2 João","3 João",
-    "Gênesis","Êxodo","Levítico","Números","Deuteronômio","Josué","Juízes","Rute","Esdras","Neemias","Ester","Jó",
-    "Salmos","Provérbios","Eclesiastes","Cânticos","Isaías","Jeremias","Lamentações","Ezequiel","Daniel","Oséias",
-    "Joel","Amós","Obadias","Jonas","Miquéias","Naum","Habacuque","Sofonias","Ageu","Zacarias","Malaquias",
-    "Mateus","Marcos","Lucas","João","Atos","Romanos","Gálatas","Efésios","Filipenses","Colossenses",
-    "Filemom","Hebreus","Tiago","Judas","Apocalipse","Tito"
-  ];
-  const bookIndex = cleanLines.findIndex(value => bookNames.some(book => value.toLocaleLowerCase("pt-BR") === book.toLocaleLowerCase("pt-BR")));
-  const book = bookIndex >= 0 ? cleanLines[bookIndex] : "";
+  const bookNames = ["Gênesis","Êxodo","Levítico","Números","Deuteronômio","Josué","Juízes","Rute","1 Samuel","2 Samuel","1 Reis","2 Reis","1 Crônicas","2 Crônicas","Esdras","Neemias","Ester","Jó","Salmos","Provérbios","Eclesiastes","Cânticos","Isaías","Jeremias","Lamentações","Ezequiel","Daniel","Oséias","Joel","Amós","Obadias","Jonas","Miquéias","Naum","Habacuque","Sofonias","Ageu","Zacarias","Malaquias","Mateus","Marcos","Lucas","João","Atos","Romanos","1 Coríntios","2 Coríntios","Gálatas","Efésios","Filipenses","Colossenses","1 Tessalonicenses","2 Tessalonicenses","1 Timóteo","2 Timóteo","Tito","Filemom","Hebreus","Tiago","1 Pedro","2 Pedro","1 João","2 João","3 João","Judas","Apocalipse"];
+  const book = cleanLines.find(value => bookNames.some(name => value.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))) ?? "";
   const versionPattern = /^(NVI|NVT|ARA|ARC|ACF|NAA|NTLH|KJV|BKJ|AS21|NBV|TB)$/i;
   const version = cleanLines.find(value => versionPattern.test(value)) ?? "";
   const numbers = cleanLines.filter(value => /^\d{1,3}$/.test(value));
   const chapter = numbers.length >= 2 ? numbers[numbers.length - 2] : "";
   const verseNumber = numbers.length >= 2 ? numbers[numbers.length - 1] : "";
-  const reference = book && chapter && verseNumber ? `${book} ${chapter}:${verseNumber}` : chapter && verseNumber ? `${chapter}:${verseNumber}` : "";
+  const reference = book && chapter && verseNumber ? `${book} ${chapter}:${verseNumber}` : "";
   const metadata = new Set([book, version, ...numbers]);
-  const textParts = cleanLines.filter(value => !metadata.has(value) && !versionPattern.test(value) && !/^\d{1,3}$/.test(value));
-  const text = textParts.join("\n").slice(0, 3000);
+  const textCandidates = [...new Set(cleanLines.filter(value => !metadata.has(value) && !versionPattern.test(value) && !/^\d{1,3}$/.test(value)))];
+  // Nunca juntar caixas de texto diferentes: podem ser versículos vizinhos ou texto residual do tema.
+  if (textCandidates.length !== 1) {
+    throw new Error(textCandidates.length === 0
+      ? "Não consegui localizar o texto do versículo selecionado. Confira se ele está ao vivo na camada escolhida."
+      : `A camada contém ${textCandidates.length} textos diferentes. Para evitar importar versículos extras ou errados, não importei nada. Deixe apenas um versículo selecionado ao vivo e tente novamente.`);
+  }
+  const text = textCandidates[0].slice(0, 3000);
   spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3000) });
 }
 
