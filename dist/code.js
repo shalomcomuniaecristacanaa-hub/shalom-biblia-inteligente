@@ -125,7 +125,11 @@
     const live = await spresenter.live.read(output);
     const presentation = live?.[layer];
     if (!presentation) throw new Error("Não há conteúdo ao vivo na camada escolhida. Coloque somente o versículo desejado ao vivo e tente novamente.");
-    const rawStrings = collectText(presentation);
+    const liveProps = presentation.props;
+    const rawStrings = collectText(liveProps);
+    if (!rawStrings.length) {
+      throw new Error("Não encontrei o texto preenchido nos dados do versículo ao vivo. Confira a camada Conteúdo selecionada.");
+    }
     const lines = rawStrings.flatMap((value) => value.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n").split(/\r?\n/)).map((value) => value.trim()).filter(Boolean);
     const isPlaceholder = (value) => /^\{\s*(?:verso|livro|cap[ií]tulo|vers[ií]culo|vers[aã]o)\s*\}$/i.test(value) || /^\{\s*livro\s*\}\s+\{\s*cap[ií]tulo\s*\}:\{\s*vers[ií]culo\s*\}$/i.test(value);
     const cleanLines = lines.map((value) => value.replace(/^,?\s*TEXT\s*$/i, "").trim()).filter((value) => value && !isPlaceholder(value) && !/^Padr[aã]o\s*[—-]\s*B[ií]blia$/i.test(value));
