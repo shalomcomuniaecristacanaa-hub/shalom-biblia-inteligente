@@ -55,7 +55,7 @@ async function ensureStage(output: string, layer: number, kind: "content" | "bac
   prepared.add(key);
 }
 function backgroundHtml(url: string, theme: string) {
-  const safeUrl = /^https?:\/\//i.test(url) ? url.replace(/["\\]/g, "") : "";
+  const safeUrl = /^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(url) ? url.replace(/["\\]/g, "") : "";
   const bg = safeUrl
     ? `background-image:linear-gradient(90deg,rgba(5,8,14,.30),rgba(5,8,14,.48)),url("${safeUrl}");background-size:cover;background-position:center;`
     : "background:radial-gradient(ellipse at 50% 30%,#56647a 0%,#1c2939 48%,#090e18 100%);";
