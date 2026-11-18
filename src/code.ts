@@ -128,7 +128,13 @@ async function captureLive(msg: UiMessage) {
   const live = await spresenter.live.read(output);
   const presentation = live?.[layer];
   if (!presentation) throw new Error("Não há conteúdo ao vivo na camada escolhida. Coloque somente o versículo desejado ao vivo e tente novamente.");
-  const rawStrings = collectText(presentation);
+  // Leia somente os dados preenchidos da apresentação. Percorrer o objeto inteiro
+  // também captura tema, elementos-modelo e placeholders, gerando falsos "dois textos".
+  const liveProps = (presentation as { props?: unknown }).props;
+  const rawStrings = collectText(liveProps);
+  if (!rawStrings.length) {
+    throw new Error("Não encontrei o texto preenchido nos dados do versículo ao vivo. Confira a camada Conteúdo selecionada.");
+  }
   const lines = rawStrings.flatMap(value => value.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n").split(/\r?\n/))
     .map(value => value.trim()).filter(Boolean);
   const isPlaceholder = (value: string) => /^\{\s*(?:verso|livro|cap[ií]tulo|vers[ií]culo|vers[aã]o)\s*\}$/i.test(value)
