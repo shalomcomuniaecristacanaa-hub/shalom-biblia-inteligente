@@ -127,37 +127,36 @@ async function captureLive(msg: UiMessage) {
   const layer = Number(msg.captureLayer);
   const live = await spresenter.live.read(output);
   const presentation = live?.[layer];
-  const rawStrings = [...new Set(collectText(presentation))].map(s => s.trim()).filter(Boolean);
-  const clean = (s: string) => s
-    .replace(/Padrão\\s*[—-]\\s*Bíblia/gi, "")
-    .replace(/\\{(?:livro|capitulo|capítulo|versiculo|versículo|verso|versao|versão)\\}/gi, "")
-    .replace(/^,?\\s*TEXT\\s*$/i, "")
-    .replace(/\\s+/g, " ").trim();
-  const items = rawStrings.map(clean).filter(Boolean);
+  const rawStrings = collectText(presentation);
+  // Alguns layouts chegam como um unico campo multilinha; outros chegam em varios campos.
+  const lines = rawStrings.flatMap(value => value
+    .replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n")
+    .split(/\r?\n/)).map(value => value.trim()).filter(Boolean);
+  const isPlaceholder = (value: string) => /^\{\s*(?:verso|livro|cap[ií]tulo|vers[ií]culo|vers[aã]o)\s*\}$/i.test(value)
+    || /^\{\s*livro\s*\}\s+\{\s*cap[ií]tulo\s*\}:\{\s*vers[ií]culo\s*\}$/i.test(value);
+  const cleanLines = lines.map(value => value.replace(/^,?\s*TEXT\s*$/i, "").trim())
+    .filter(value => value && !isPlaceholder(value) && !/^Padr[aã]o\s*[—-]\s*B[ií]blia$/i.test(value));
   const bookNames = [
     "1 Samuel","2 Samuel","1 Reis","2 Reis","1 Crônicas","2 Crônicas","1 Coríntios","2 Coríntios",
     "1 Tessalonicenses","2 Tessalonicenses","1 Timóteo","2 Timóteo","1 Pedro","2 Pedro","1 João","2 João","3 João",
-    "Gênesis","Êxodo","Levítico","Números","Deuteronômio","Josué","Juízes","Rute","Samuel","Reis","Crônicas",
-    "Esdras","Neemias","Ester","Jó","Salmos","Provérbios","Eclesiastes","Cânticos","Isaías","Jeremias",
-    "Lamentações","Ezequiel","Daniel","Oséias","Joel","Amós","Obadias","Jonas","Miquéias","Naum","Habacuque",
-    "Sofonias","Ageu","Zacarias","Malaquias","Mateus","Marcos","Lucas","João","Atos","Romanos","Gálatas",
-    "Efésios","Filipenses","Colossenses","1 Coríntios","2 Coríntios","Colossenses","1 Timóteo","2 Timóteo",
-    "Tito","Filemom","Hebreus","Tiago","Judas","Apocalipse"
+    "Gênesis","Êxodo","Levítico","Números","Deuteronômio","Josué","Juízes","Rute","Esdras","Neemias","Ester","Jó",
+    "Salmos","Provérbios","Eclesiastes","Cânticos","Isaías","Jeremias","Lamentações","Ezequiel","Daniel","Oséias",
+    "Joel","Amós","Obadias","Jonas","Miquéias","Naum","Habacuque","Sofonias","Ageu","Zacarias","Malaquias",
+    "Mateus","Marcos","Lucas","João","Atos","Romanos","Gálatas","Efésios","Filipenses","Colossenses",
+    "Filemom","Hebreus","Tiago","Judas","Apocalipse","Tito"
   ];
-  const bookIndex = items.findIndex(s => bookNames.some(b => s.toLocaleLowerCase("pt-BR") === b.toLocaleLowerCase("pt-BR")));
-  const book = bookIndex >= 0 ? items[bookIndex] : "";
-  const versions = /^(NVI|NVT|ARA|ARC|ACF|NAA|NTLH|KJV|BKJ|AS21|NBV|TB)$/i;
-  const version = items.find(s => versions.test(s)) ?? "";
-  // O SPresenter pode acrescentar ruído ao número do versículo (ex.: "22 veiro sassim").
-  const numericEntries = items.map(s => ({ raw: s, number: s.match(/^(\\d{1,3})(?:\\s+veiro\\s+sassim)?$/i)?.[1] ?? "" })).filter(x => x.number);
-  const numericFields = numericEntries.map(x => x.number);
-  const chapter = numericFields.length >= 2 ? numericFields[numericFields.length - 2] : "";
-  const verseNumber = numericFields.length >= 2 ? numericFields[numericFields.length - 1] : "";
-  const reference = book && chapter && verseNumber ? book + " " + chapter + ":" + verseNumber : "";
-  const metadata = new Set([book, version, ...numericEntries.map(x => x.raw)].filter(Boolean));
-  const textParts = items.filter(s => !metadata.has(s) && !/^Padrão/i.test(s) && !/^\\{.*\\}$/.test(s) && !versions.test(s));
-  const text = textParts.join("\\n").slice(0, 3000);
-  spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: items.join(" | ").slice(0, 3000) });
+  const bookIndex = cleanLines.findIndex(value => bookNames.some(book => value.toLocaleLowerCase("pt-BR") === book.toLocaleLowerCase("pt-BR")));
+  const book = bookIndex >= 0 ? cleanLines[bookIndex] : "";
+  const versionPattern = /^(NVI|NVT|ARA|ARC|ACF|NAA|NTLH|KJV|BKJ|AS21|NBV|TB)$/i;
+  const version = cleanLines.find(value => versionPattern.test(value)) ?? "";
+  const numbers = cleanLines.filter(value => /^\d{1,3}$/.test(value));
+  const chapter = numbers.length >= 2 ? numbers[numbers.length - 2] : "";
+  const verseNumber = numbers.length >= 2 ? numbers[numbers.length - 1] : "";
+  const reference = book && chapter && verseNumber ? `${book} ${chapter}:${verseNumber}` : chapter && verseNumber ? `${chapter}:${verseNumber}` : "";
+  const metadata = new Set([book, version, ...numbers]);
+  const textParts = cleanLines.filter(value => !metadata.has(value) && !versionPattern.test(value) && !/^\d{1,3}$/.test(value));
+  const text = textParts.join("\n").slice(0, 3000);
+  spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3000) });
 }
 
 spresenter.ui.onmessage = async (raw: unknown) => {
