@@ -102,12 +102,25 @@ async function present(msg: UiMessage) {
   if (!Number.isInteger(contentLayer) || !Number.isInteger(backgroundLayer) || contentLayer === backgroundLayer) {
     throw new Error("Selecione duas camadas diferentes: Conteúdo e Fundo.");
   }
-  const resolvedBackground = await resolveBackground(verse.background ?? "");
-  await ensureStage(output, backgroundLayer, "background");
+
+  // Prioriza o texto: uma falha de imagem externa nunca deve impedir a projeção bíblica.
   await ensureStage(output, contentLayer, "content");
-  spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
   spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
-  spresenter.ui.postMessage({ type: "presented", reference: verse.reference });
+
+  try {
+    const resolvedBackground = await resolveBackground(verse.background ?? "");
+    await ensureStage(output, backgroundLayer, "background");
+    spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
+    spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
+  } catch (backgroundError) {
+    // Mantém o conteúdo no telão e informa que somente o fundo falhou.
+    spresenter.ui.postMessage({
+      type: "presented",
+      reference: verse.reference,
+      background: "error",
+      message: "O versículo foi apresentado, mas o fundo não carregou: " + (backgroundError instanceof Error ? backgroundError.message : String(backgroundError))
+    });
+  }
 }
 async function captureLive(msg: UiMessage) {
   const output = String(msg.output ?? "0");
@@ -115,15 +128,34 @@ async function captureLive(msg: UiMessage) {
   const live = await spresenter.live.read(output);
   const presentation = live?.[layer];
   const rawStrings = [...new Set(collectText(presentation))].map(s => s.trim()).filter(Boolean);
-  const joined = rawStrings.join(" ").replace(/\s+/g, " ").trim();
-  const referencePattern = /(1\s*Samuel|2\s*Samuel|1\s*Reis|2\s*Reis|1\s*Crônicas|2\s*Crônicas|1\s*Coríntios|2\s*Coríntios|1\s*Tessalonicenses|2\s*Tessalonicenses|1\s*Timóteo|2\s*Timóteo|1\s*Pedro|2\s*Pedro|1\s*João|2\s*João|3\s*João|Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|Samuel|Reis|Crônicas|Esdras|Neemias|Ester|Jó|Salmos?|Provérbios|Eclesiastes|Cânticos|Isaías|Jeremias|Lamentações|Ezequiel|Daniel|Oséias|Joel|Amós|Obadias|Jonas|Miquéias|Naum|Habacuque|Sofonias|Ageu|Zacarias|Malaquias|Mateus|Marcos|Lucas|João|Atos|Romanos|Gálatas|Efésios|Filipenses|Colossenses|Tito|Filemom|Hebreus|Tiago|Judas|Apocalipse)\s+(\d{1,3})(?::(\d{1,3}(?:[-–]\d{1,3})?))?/i;
-  const match = joined.match(referencePattern);
-  const reference = match ? match[0].trim() : "";
-  const book = match ? match[1].replace(/\s+/g, " ").trim() : "";
-  let text = rawStrings.map(s => s.replace(/Padrão\s*[—-]\s*Bíblia/gi, "").replace(/\{livro\}\s*\{capitulo\}:\{versiculo\}/gi, "").trim()).filter(Boolean).join("\n");
-  if (reference) text = text.replace(reference, "").trim();
-  text = text.replace(/\s{2,}/g, " ").trim().slice(0, 3000);
-  spresenter.ui.postMessage({ type: "captured", reference, book, text, raw: joined.slice(0, 3000) });
+  const clean = (s: string) => s
+    .replace(/Padrão\\s*[—-]\\s*Bíblia/gi, "")
+    .replace(/\\{(?:livro|capitulo|capítulo|versiculo|versículo|verso|versao|versão)\\}/gi, "")
+    .replace(/^,?\\s*TEXT\\s*$/i, "")
+    .replace(/\\s+/g, " ").trim();
+  const items = rawStrings.map(clean).filter(Boolean);
+  const bookNames = [
+    "1 Samuel","2 Samuel","1 Reis","2 Reis","1 Crônicas","2 Crônicas","1 Coríntios","2 Coríntios",
+    "1 Tessalonicenses","2 Tessalonicenses","1 Timóteo","2 Timóteo","1 Pedro","2 Pedro","1 João","2 João","3 João",
+    "Gênesis","Êxodo","Levítico","Números","Deuteronômio","Josué","Juízes","Rute","Samuel","Reis","Crônicas",
+    "Esdras","Neemias","Ester","Jó","Salmos","Provérbios","Eclesiastes","Cânticos","Isaías","Jeremias",
+    "Lamentações","Ezequiel","Daniel","Oséias","Joel","Amós","Obadias","Jonas","Miquéias","Naum","Habacuque",
+    "Sofonias","Ageu","Zacarias","Malaquias","Mateus","Marcos","Lucas","João","Atos","Romanos","Gálatas",
+    "Efésios","Filipenses","Colossenses","1 Coríntios","2 Coríntios","Colossenses","1 Timóteo","2 Timóteo",
+    "Tito","Filemom","Hebreus","Tiago","Judas","Apocalipse"
+  ];
+  const bookIndex = items.findIndex(s => bookNames.some(b => s.toLocaleLowerCase("pt-BR") === b.toLocaleLowerCase("pt-BR")));
+  const book = bookIndex >= 0 ? items[bookIndex] : "";
+  const versions = /^(NVI|NVT|ARA|ARC|ACF|NAA|NTLH|KJV|BKJ|AS21|NBV|TB)$/i;
+  const version = items.find(s => versions.test(s)) ?? "";
+  const numericFields = items.filter(s => /^\\d{1,3}$/.test(s));
+  const chapter = numericFields.length >= 2 ? numericFields[numericFields.length - 2] : "";
+  const verseNumber = numericFields.length >= 2 ? numericFields[numericFields.length - 1] : "";
+  const reference = book && chapter && verseNumber ? book + " " + chapter + ":" + verseNumber : "";
+  const metadata = new Set([book, version, ...numericFields].filter(Boolean));
+  const textParts = items.filter(s => !metadata.has(s) && !/^Padrão/i.test(s) && !/^\\{.*\\}$/.test(s) && !versions.test(s));
+  const text = textParts.join("\\n").slice(0, 3000);
+  spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: items.join(" | ").slice(0, 3000) });
 }
 
 spresenter.ui.onmessage = async (raw: unknown) => {
