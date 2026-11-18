@@ -8,6 +8,9 @@ on:
       - "README.md"
       - "docs/**"
   workflow_dispatch:
+concurrency:
+  group: shalom-plugin-build-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
@@ -31,7 +34,16 @@ jobs:
           git add dist release
           if ! git diff --cached --quiet; then
             git commit -m "build: publish compiled plugin"
-            git push
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              echo "Push attempt $attempt failed; retrying after fetch/rebase."
+            done
+            echo "Could not publish build artifacts after 3 attempts."
+            exit 1
           fi
       - name: Upload installable ZIP
         uses: actions/upload-artifact@v4
