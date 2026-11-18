@@ -148,11 +148,13 @@ async function captureLive(msg: UiMessage) {
   const book = bookIndex >= 0 ? items[bookIndex] : "";
   const versions = /^(NVI|NVT|ARA|ARC|ACF|NAA|NTLH|KJV|BKJ|AS21|NBV|TB)$/i;
   const version = items.find(s => versions.test(s)) ?? "";
-  const numericFields = items.filter(s => /^\\d{1,3}$/.test(s));
+  // O SPresenter pode acrescentar ruído ao número do versículo (ex.: "22 veiro sassim").
+  const numericEntries = items.map(s => ({ raw: s, number: s.match(/^(\\d{1,3})(?:\\s+veiro\\s+sassim)?$/i)?.[1] ?? "" })).filter(x => x.number);
+  const numericFields = numericEntries.map(x => x.number);
   const chapter = numericFields.length >= 2 ? numericFields[numericFields.length - 2] : "";
   const verseNumber = numericFields.length >= 2 ? numericFields[numericFields.length - 1] : "";
   const reference = book && chapter && verseNumber ? book + " " + chapter + ":" + verseNumber : "";
-  const metadata = new Set([book, version, ...numericFields].filter(Boolean));
+  const metadata = new Set([book, version, ...numericEntries.map(x => x.raw)].filter(Boolean));
   const textParts = items.filter(s => !metadata.has(s) && !/^Padrão/i.test(s) && !/^\\{.*\\}$/.test(s) && !versions.test(s));
   const text = textParts.join("\\n").slice(0, 3000);
   spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: items.join(" | ").slice(0, 3000) });
