@@ -71,7 +71,7 @@ export function App() {
   }
   const layerOptions = layers.map(l => <option key={l.index} value={String(l.index)}>{l.name || "Camada " + l.index} (#{l.index})</option>);
 
-  return <main>
+  return <main onClick={() => { if (contextVerse) setContextVerse(null); }}>
     <header><div className="brand">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className="online" /></header>
     <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
     <nav>
@@ -91,7 +91,7 @@ export function App() {
         <input className="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar referência, texto ou tema..." />
         <div className="groupchips">{groups.map(g => <button key={g} className={group === g ? "chosen" : ""} onClick={() => setGroup(g)}>{g}</button>)}</div>
         {filtered.length === 0 ? <div className="empty">Nenhum versículo salvo. Use “Adicionar” para criar sua primeira lista.</div> : <div className="verse-list">{filtered.map(v =>
-          <article className="verse" key={v.id} onContextMenu={e => { e.preventDefault(); setContextVerse(v.id); }}>\n            {contextVerse === v.id && <div className="context-menu"><button onClick={() => { edit(v); setContextVerse(null); }}>＋ Adicionar / editar</button><button onClick={() => { present(v); setContextVerse(null); }}>▶ Apresentar</button><button onClick={() => setContextVerse(null)}>Fechar</button></div>}
+          <article className="verse" key={v.id} onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextVerse(v.id); }}>\n            {contextVerse === v.id && <div className="context-menu" onClick={e => e.stopPropagation()}><button onClick={() => { edit(v); setContextVerse(null); }}>＋ Adicionar / editar</button><button onClick={() => { present(v); setContextVerse(null); }}>▶ Apresentar</button><button onClick={() => setContextVerse(null)}>Fechar</button></div>}
             <div className="verse-head"><div><strong>{v.reference}</strong><small>{v.group || "Geral"}</small></div><div className="verse-actions"><button className="go" onClick={() => present(v)}>▶ APRESENTAR</button><button onClick={() => edit(v)}>Editar</button><button className="danger" onClick={() => postMessage({ type: "delete-verse", id: v.id })}>Excluir</button></div></div>
             <p>{v.text}</p>{v.theme && <span className="tag">{v.theme}</span>}
             <div className="sequence"><button onClick={() => move(-1, v)}>← Anterior</button><button onClick={() => move(1, v)}>Próximo →</button></div>
