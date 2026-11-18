@@ -54,50 +54,38 @@ async function ensureStage(output: string, layer: number, kind: "content" | "bac
   await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
   prepared.add(key);
 }
+function normalizeBackgroundSource(source: string): string {
+  let value = String(source ?? "").replace(/[\\u200B-\\u200D\\uFEFF]/g, "").trim();
+  // Aceita também links copiados no formato Markdown: [texto](https://...)
+  const markdown = value.match(/^\\[[^\\]]*\\]\\((https?:\\/\\/[^\\s)]+)\\)$/i);
+  if (markdown) value = markdown[1];
+  if (value.startsWith("<") && value.endsWith(">")) value = value.slice(1, -1).trim();
+  return value;
+}
 async function resolveBackground(source: string): Promise<string> {
-  const value = String(source ?? "").trim();
+  const value = normalizeBackgroundSource(source);
   if (!value) return "";
-  if (/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(value)) return value;
+  if (/^data:image\\/(?:png|jpeg|webp|gif);base64,/i.test(value)) return value;
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error("Endereço da imagem inválido. Use uma URL HTTPS ou selecione um arquivo do computador.");
+    throw new Error("Endereço inválido. Cole somente o link completo da imagem, começando com https://, ou selecione um arquivo do computador.");
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new Error("A imagem precisa usar um endereço HTTP ou HTTPS.");
+    throw new Error("O endereço da imagem precisa começar com http:// ou https://.");
   }
-  let response: Response;
-  try {
-    response = await fetch(parsed.toString(), { method: "GET", credentials: "omit" });
-  } catch {
-    throw new Error("Não foi possível baixar a imagem desse endereço. O site pode bloquear acesso externo ou exigir permissões de rede.");
-  }
-  if (!response.ok) throw new Error(`O site da imagem respondeu com HTTP ${response.status}.`);
-  const mime = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-  if (!allowed.includes(mime)) {
-    throw new Error("O endereço não retornou uma imagem JPG, PNG, WEBP ou GIF.");
-  }
-  const declaredSize = Number(response.headers.get("content-length") ?? 0);
-  if (declaredSize > 6 * 1024 * 1024) throw new Error("A imagem da internet ultrapassa o limite de 6 MB.");
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > 6 * 1024 * 1024) {
-    throw new Error("A imagem está vazia ou ultrapassa o limite de 6 MB.");
-  }
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return `data:${mime};base64,${btoa(binary)}`;
+  // Não usamos fetch aqui: a exibição de imagens em <img> não exige CORS,
+  // ao contrário do download via fetch em muitas WebViews.
+  return parsed.href;
 }
-function backgroundHtml(url: string, theme: string) {
-  const safeUrl = /^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(url) ? url.replace(/["\\]/g, "") : "";
-  const bg = safeUrl
-    ? `background-image:linear-gradient(90deg,rgba(5,8,14,.30),rgba(5,8,14,.48)),url("${safeUrl}");background-size:cover;background-position:center;`
-    : "background:radial-gradient(ellipse at 50% 30%,#56647a 0%,#1c2939 48%,#090e18 100%);";
-  return `<div style="position:absolute;inset:0;overflow:hidden;${bg}"><div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.18),transparent 55%);"></div></div>`;
+function backgroundHtml(source: string, theme: string) {
+  const safeSource = safeText(source);
+  const image = safeSource
+    ? `<img src="${safeSource}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block;" />`
+    : "";
+  const fallback = "background:radial-gradient(ellipse at 50% 30%,#56647a 0%,#1c2939 48%,#090e18 100%);";
+  return `<div style="position:absolute;inset:0;overflow:hidden;${fallback}">${image}<div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,8,14,.22),rgba(5,8,14,.38));pointer-events:none;"></div><div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.18),transparent 55%);pointer-events:none;"></div></div>`;
 }
 function verseHtml(verse: Verse) {
   const ref = safeText(verse.reference);
