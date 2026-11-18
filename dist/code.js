@@ -59,6 +59,44 @@
     await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
     prepared.add(key);
   }
+  async function resolveBackground(source) {
+    const value = String(source ?? "").trim();
+    if (!value) return "";
+    if (/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(value)) return value;
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error("Endereço da imagem inválido. Use uma URL HTTPS ou selecione um arquivo do computador.");
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new Error("A imagem precisa usar um endereço HTTP ou HTTPS.");
+    }
+    let response;
+    try {
+      response = await fetch(parsed.toString(), { method: "GET", credentials: "omit" });
+    } catch {
+      throw new Error("Não foi possível baixar a imagem desse endereço. O site pode bloquear acesso externo ou exigir permissões de rede.");
+    }
+    if (!response.ok) throw new Error(`O site da imagem respondeu com HTTP ${response.status}.`);
+    const mime = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(mime)) {
+      throw new Error("O endereço não retornou uma imagem JPG, PNG, WEBP ou GIF.");
+    }
+    const declaredSize = Number(response.headers.get("content-length") ?? 0);
+    if (declaredSize > 6 * 1024 * 1024) throw new Error("A imagem da internet ultrapassa o limite de 6 MB.");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 6 * 1024 * 1024) {
+      throw new Error("A imagem está vazia ou ultrapassa o limite de 6 MB.");
+    }
+    let binary = "";
+    const chunkSize = 32768;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+  }
   function backgroundHtml(url, theme) {
     const safeUrl = /^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(url) ? url.replace(/["\\]/g, "") : "";
     const bg = safeUrl ? `background-image:linear-gradient(90deg,rgba(5,8,14,.30),rgba(5,8,14,.48)),url("${safeUrl}");background-size:cover;background-position:center;` : "background:radial-gradient(ellipse at 50% 30%,#56647a 0%,#1c2939 48%,#090e18 100%);";
@@ -78,9 +116,10 @@
     if (!Number.isInteger(contentLayer) || !Number.isInteger(backgroundLayer) || contentLayer === backgroundLayer) {
       throw new Error("Selecione duas camadas diferentes: Conteúdo e Fundo.");
     }
+    const resolvedBackground = await resolveBackground(verse.background ?? "");
     await ensureStage(output, backgroundLayer, "background");
     await ensureStage(output, contentLayer, "content");
-    spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(verse.background ?? "", verse.theme ?? ""));
+    spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
     spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
     spresenter.ui.postMessage({ type: "presented", reference: verse.reference });
   }
