@@ -114,16 +114,15 @@ async function captureLive(msg: UiMessage) {
   const layer = Number(msg.captureLayer);
   const live = await spresenter.live.read(output);
   const presentation = live?.[layer];
-  const ignored = /^(?:Padrão\s*[—-]\s*Bíblia|\{livro\}\s+\{capitulo\}:\{versiculo\})$/i;
-  const strings = [...new Set(collectText(presentation))]
-    .map(s => s.replace(/Padrão\s*[—-]\s*Bíblia/gi, "").replace(/\{livro\}\s*\{capitulo\}:\{versiculo\}/gi, "").trim())
-    .filter(s => s && !ignored.test(s) && !/^\{(?:livro|capitulo|versiculo)\}/i.test(s));
-  const joined = strings.join(" ").replace(/\s+/g, " ").trim();
-  const bookPattern = "(?:Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|1\\s*Samuel|2\\s*Samuel|1\\s*Reis|2\\s*Reis|1\\s*Crônicas|2\\s*Crônicas|Esdras|Neemias|Ester|Jó|Salmos?|Provérbios|Eclesiastes|Cânticos|Isaías|Jeremias|Lamentações|Ezequiel|Daniel|Oséias|Joel|Amós|Obadias|Jonas|Miquéias|Naum|Habacuque|Sofonias|Ageu|Zacarias|Malaquias|Mateus|Marcos|Lucas|João|Atos|Romanos|1\\s*Coríntios|2\\s*Coríntios|Gálatas|Efésios|Filipenses|Colossenses|1\\s*Tessalonicenses|2\\s*Tessalonicenses|1\\s*Timóteo|2\\s*Timóteo|Tito|Filemom|Hebreus|Tiago|1\\s*Pedro|2\\s*Pedro|1\\s*João|2\\s*João|3\\s*João|Judas|Apocalipse)";
-  const referenceMatch = joined.match(new RegExp("(" + bookPattern + ")\\s+\\d{1,3}(?::\\d{1,3}(?:[-–]\\d{1,3})?)?", "i"));
-  const reference = referenceMatch?.[0] ?? "";
-  const book = referenceMatch?.[1] ?? "";
-  const text = strings.filter(s => s !== reference && s.length > 10 && !/Padrão\s*[—-]\s*Bíblia|\{livro\}|\{capitulo\}|\{versiculo\}/i.test(s)).join("\n").slice(0, 3000);
+  const rawStrings = [...new Set(collectText(presentation))].map(s => s.trim()).filter(Boolean);
+  const joined = rawStrings.join(" ").replace(/\s+/g, " ").trim();
+  const referencePattern = /(1\s*Samuel|2\s*Samuel|1\s*Reis|2\s*Reis|1\s*Crônicas|2\s*Crônicas|1\s*Coríntios|2\s*Coríntios|1\s*Tessalonicenses|2\s*Tessalonicenses|1\s*Timóteo|2\s*Timóteo|1\s*Pedro|2\s*Pedro|1\s*João|2\s*João|3\s*João|Gênesis|Êxodo|Levítico|Números|Deuteronômio|Josué|Juízes|Rute|Samuel|Reis|Crônicas|Esdras|Neemias|Ester|Jó|Salmos?|Provérbios|Eclesiastes|Cânticos|Isaías|Jeremias|Lamentações|Ezequiel|Daniel|Oséias|Joel|Amós|Obadias|Jonas|Miquéias|Naum|Habacuque|Sofonias|Ageu|Zacarias|Malaquias|Mateus|Marcos|Lucas|João|Atos|Romanos|Gálatas|Efésios|Filipenses|Colossenses|Tito|Filemom|Hebreus|Tiago|Judas|Apocalipse)\s+(\d{1,3})(?::(\d{1,3}(?:[-–]\d{1,3})?))?/i;
+  const match = joined.match(referencePattern);
+  const reference = match ? match[0].trim() : "";
+  const book = match ? match[1].replace(/\s+/g, " ").trim() : "";
+  let text = rawStrings.map(s => s.replace(/Padrão\s*[—-]\s*Bíblia/gi, "").replace(/\{livro\}\s*\{capitulo\}:\{versiculo\}/gi, "").trim()).filter(Boolean).join("\n");
+  if (reference) text = text.replace(reference, "").trim();
+  text = text.replace(/\s{2,}/g, " ").trim().slice(0, 3000);
   spresenter.ui.postMessage({ type: "captured", reference, book, text, raw: joined.slice(0, 3000) });
 }
 
