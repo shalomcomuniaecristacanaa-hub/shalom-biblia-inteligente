@@ -3,6 +3,7 @@
   const STORE_KEY = "shalom.verses.v1";
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
+  const previousBackgrounds = /* @__PURE__ */ new Map();
   function safeText(value) {
     return String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   }
@@ -103,6 +104,12 @@
     if (!Number.isInteger(contentLayer) || !Number.isInteger(backgroundLayer) || contentLayer === backgroundLayer) {
       throw new Error("Selecione duas camadas diferentes: Conteúdo e Fundo.");
     }
+    const backgroundKey = `${output}:${backgroundLayer}`;
+    if (!previousBackgrounds.has(backgroundKey)) {
+      const currentLive = await spresenter.live.read(output);
+      const previous = currentLive?.[backgroundLayer];
+      if (previous) previousBackgrounds.set(backgroundKey, previous);
+    }
     await ensureStage(output, contentLayer, "content");
     spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
     try {
@@ -171,6 +178,22 @@
       else if (msg.type === "open-bible") {
         await spresenter.panels.select("bible");
         spresenter.ui.postMessage({ type: "notice", message: "Bíblia do SPresenter aberta. Selecione e coloque o versículo ao vivo; depois use Importar do Conteúdo." });
+      } else if (msg.type === "restore-previous-background") {
+        const output = String(msg.output ?? "0");
+        const contentLayer = Number(msg.contentLayer);
+        const backgroundLayer = Number(msg.backgroundLayer);
+        const key = `${output}:${backgroundLayer}`;
+        const previous = previousBackgrounds.get(key);
+        if (!previous) {
+          spresenter.ui.postMessage({ type: "notice", message: "Não há um fundo anterior salvo nesta sessão. Apresente primeiro um versículo sobre um fundo que já esteja ao vivo." });
+        } else {
+          await spresenter.live.clear(output, contentLayer);
+          await spresenter.live.apply(output, backgroundLayer, previous);
+          previousBackgrounds.delete(key);
+          prepared.delete(`${output}:${contentLayer}:content`);
+          prepared.delete(`${output}:${backgroundLayer}:background`);
+          spresenter.ui.postMessage({ type: "notice", message: "Versículo encerrado. Fundo anterior restaurado." });
+        }
       } else if (msg.type === "clear") {
         const output = String(msg.output ?? "0");
         await spresenter.live.clear(output, Number(msg.contentLayer));
