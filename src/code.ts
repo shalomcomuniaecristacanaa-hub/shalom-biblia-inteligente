@@ -30,10 +30,11 @@ async function getVerses(): Promise<Verse[]> {
   return (await spresenter.storage.get<Verse[]>(STORE_KEY)) ?? [];
 }
 async function sendState() {
-  const [verses, outputs, layers] = await Promise.all([
-    getVerses(), spresenter.outputs.list(), spresenter.layers.list()
+  const [verses, outputs, layers, groupBackgrounds] = await Promise.all([
+    getVerses(), spresenter.outputs.list(), spresenter.layers.list(),
+    spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY)
   ]);
-  spresenter.ui.postMessage({ type: "state", verses, outputs, layers });
+  spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" } });
 }
 function stagePresentation(title: string, elementId: string) {
   return {
