@@ -107,38 +107,19 @@ async function present(msg: UiMessage) {
     throw new Error("Selecione duas camadas diferentes: Conteúdo e Fundo.");
   }
 
-  // Apresenta o texto na camada Conteúdo sem substituir o fundo já programado
-  // no SPresenter. Só troca o fundo quando há imagem configurada para o versículo
-  // ou para sua categoria.
+  // Regra principal: ao apresentar um versículo, escrever somente na camada
+  // Conteúdo. Não ler, preparar, aplicar, limpar nem substituir a camada Fundo.
+  // Assim o fundo que o operador já deixou programado no SPresenter permanece
+  // exatamente como está, inclusive quando existe imagem padrão cadastrada.
   await ensureStage(output, contentLayer, "content");
   spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
 
-  try {
-    const defaults = await spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY);
-    const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
-    const categoryBackground = category ? defaults?.[category as keyof GroupBackgrounds] : "";
-    const selectedBackground = verse.background || categoryBackground || defaults?.Palavra || "";
-    if (selectedBackground) {
-      const resolvedBackground = await resolveBackground(selectedBackground);
-      const backgroundKey = `${output}:${backgroundLayer}`;
-      if (!previousBackgrounds.has(backgroundKey)) {
-        const currentLive = await spresenter.live.read(output);
-        const previous = currentLive?.[backgroundLayer];
-        if (previous) previousBackgrounds.set(backgroundKey, previous);
-      }
-      await ensureStage(output, backgroundLayer, "background");
-      spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
-    }
-    // Sem imagem própria ou padrão configurado, a camada Fundo permanece intacta.
-    spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
-  } catch (backgroundError) {
-    spresenter.ui.postMessage({
-      type: "presented",
-      reference: verse.reference,
-      background: "error",
-      message: "O versículo foi apresentado, mas o fundo não carregou: " + (backgroundError instanceof Error ? backgroundError.message : String(backgroundError))
-    });
-  }
+  spresenter.ui.postMessage({
+    type: "presented",
+    reference: verse.reference,
+    background: "preserved",
+    message: "Versículo enviado somente para Conteúdo. Fundo principal programado preservado."
+  });
 }
 async function captureLive(msg: UiMessage) {
   const output = String(msg.output ?? "0");
