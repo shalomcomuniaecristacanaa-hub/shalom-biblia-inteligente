@@ -108,31 +108,12 @@
     }
     await ensureStage(output, contentLayer, "content");
     spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
-    try {
-      const defaults = await spresenter.storage.get(GROUP_BACKGROUNDS_KEY);
-      const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
-      const categoryBackground = category ? defaults?.[category] : "";
-      const selectedBackground = verse.background || categoryBackground || defaults?.Palavra || "";
-      if (selectedBackground) {
-        const resolvedBackground = await resolveBackground(selectedBackground);
-        const backgroundKey = `${output}:${backgroundLayer}`;
-        if (!previousBackgrounds.has(backgroundKey)) {
-          const currentLive = await spresenter.live.read(output);
-          const previous = currentLive?.[backgroundLayer];
-          if (previous) previousBackgrounds.set(backgroundKey, previous);
-        }
-        await ensureStage(output, backgroundLayer, "background");
-        spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
-      }
-      spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
-    } catch (backgroundError) {
-      spresenter.ui.postMessage({
-        type: "presented",
-        reference: verse.reference,
-        background: "error",
-        message: "O versículo foi apresentado, mas o fundo não carregou: " + (backgroundError instanceof Error ? backgroundError.message : String(backgroundError))
-      });
-    }
+    spresenter.ui.postMessage({
+      type: "presented",
+      reference: verse.reference,
+      background: "preserved",
+      message: "Versículo enviado somente para Conteúdo. Fundo principal programado preservado."
+    });
   }
   async function captureLive(msg) {
     const output = String(msg.output ?? "0");
