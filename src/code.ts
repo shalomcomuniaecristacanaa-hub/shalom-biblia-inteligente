@@ -107,30 +107,31 @@ async function present(msg: UiMessage) {
     throw new Error("Selecione duas camadas diferentes: Conteúdo e Fundo.");
   }
 
-  // Prioriza o texto: uma falha de imagem externa nunca deve impedir a projeção bíblica.
-  const backgroundKey = `${output}:${backgroundLayer}`;
-  if (!previousBackgrounds.has(backgroundKey)) {
-    const currentLive = await spresenter.live.read(output);
-    const previous = currentLive?.[backgroundLayer];
-    if (previous) previousBackgrounds.set(backgroundKey, previous);
-  }
-
+  // Apresenta o texto na camada Conteúdo sem substituir o fundo já programado
+  // no SPresenter. Só troca o fundo quando há imagem configurada para o versículo
+  // ou para sua categoria.
   await ensureStage(output, contentLayer, "content");
   spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
 
   try {
     const defaults = await spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY);
     const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
-    // Prioridade: imagem específica do versículo, imagem padrão da categoria
-    // e, se não houver nenhuma, usar sempre a imagem padrão de Palavra.
     const categoryBackground = category ? defaults?.[category as keyof GroupBackgrounds] : "";
-    const defaultBackground = categoryBackground || defaults?.Palavra || "";
-    const resolvedBackground = await resolveBackground(verse.background || defaultBackground || "");
-    await ensureStage(output, backgroundLayer, "background");
-    spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
+    const selectedBackground = verse.background || categoryBackground || defaults?.Palavra || "";
+    if (selectedBackground) {
+      const resolvedBackground = await resolveBackground(selectedBackground);
+      const backgroundKey = `${output}:${backgroundLayer}`;
+      if (!previousBackgrounds.has(backgroundKey)) {
+        const currentLive = await spresenter.live.read(output);
+        const previous = currentLive?.[backgroundLayer];
+        if (previous) previousBackgrounds.set(backgroundKey, previous);
+      }
+      await ensureStage(output, backgroundLayer, "background");
+      spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
+    }
+    // Sem imagem própria ou padrão configurado, a camada Fundo permanece intacta.
     spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
   } catch (backgroundError) {
-    // Mantém o conteúdo no telão e informa que somente o fundo falhou.
     spresenter.ui.postMessage({
       type: "presented",
       reference: verse.reference,
