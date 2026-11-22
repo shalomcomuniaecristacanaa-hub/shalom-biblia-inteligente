@@ -98,6 +98,7 @@ export function App() {
           </article>
         )}</div>}
       </section>
+      <button className="wide primary" onClick={() => postMessage({ type: "restore-previous-background", output, contentLayer, backgroundLayer })}>Encerrar versículo e voltar ao fundo anterior</button>
       <button className="wide ghost" onClick={() => postMessage({ type: "clear", output, contentLayer, backgroundLayer })}>Limpar Conteúdo e Fundo</button>
     </>}
     {tab === "add" && <section className="card">
