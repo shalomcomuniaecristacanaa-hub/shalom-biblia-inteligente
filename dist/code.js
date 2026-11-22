@@ -184,6 +184,25 @@
       } else if (msg.type === "delete-verse") {
         await spresenter.storage.set(STORE_KEY, (await getVerses()).filter((v) => v.id !== msg.id));
         await sendState();
+      } else if (msg.type === "present-category-background") {
+        const category = String(msg.category ?? "");
+        if (!["Ceia", "Palavra", "Dízimo"].includes(category)) throw new Error("Selecione Ceia, Palavra ou Dízimo.");
+        const defaults = await spresenter.storage.get(GROUP_BACKGROUNDS_KEY);
+        const source = defaults?.[category] || (category !== "Palavra" ? defaults?.Palavra : "");
+        if (!source) throw new Error(`Não há imagem padrão configurada para ${category} nem para Palavra. Configure em Configuração → Imagens padrão por categoria.`);
+        const resolved = await resolveBackground(source);
+        const output = String(msg.output ?? "0");
+        const backgroundLayer = Number(msg.backgroundLayer);
+        if (!Number.isInteger(backgroundLayer)) throw new Error("Selecione a camada Fundo nas configurações.");
+        const key = `${output}:${backgroundLayer}`;
+        if (!previousBackgrounds.has(key)) {
+          const currentLive = await spresenter.live.read(output);
+          const previous = currentLive?.[backgroundLayer];
+          if (previous) previousBackgrounds.set(key, previous);
+        }
+        await ensureStage(output, backgroundLayer, "background");
+        spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolved, category));
+        spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
       } else if (msg.type === "present") await present(msg);
       else if (msg.type === "capture-live") await captureLive(msg);
       else if (msg.type === "open-bible") {
