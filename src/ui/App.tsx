@@ -22,12 +22,13 @@ export function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
+  const [groupBackgrounds, setGroupBackgrounds] = useState({ Ceia: "", Palavra: "", "Dízimo": "" });
 
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
       if (m.type === "state") {
-        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []);
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
         const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
         const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
@@ -122,7 +123,25 @@ export function App() {
       <p className="hint">Você pode usar uma URL pública ou selecionar um arquivo do computador. Imagens locais de até 6 MB ficam salvas junto ao favorito. Formatos: JPG, PNG, WEBP e GIF.</p>
       <div className="actions"><button className="primary" disabled={!verse.reference.trim() || !verse.text.trim()} onClick={save}>{editing ? "Salvar alterações" : "Salvar nos favoritos"}</button><button className="ghost" onClick={() => { setVerse(blank()); setEditing(false); setTab("favorites"); }}>Cancelar</button></div>
     </section>}
-    {tab === "settings" && <section className="card">
+    {tab === "settings" && <>
+    <section className="card">
+      <small>PADRÃO VISUAL DAS MINISTRAÇÕES</small><h2>Imagens padrão por categoria</h2>
+      <p className="hint">Escolha uma imagem para cada momento. Ela será usada nos versículos da categoria correspondente quando o favorito não tiver imagem própria.</p>
+      {(["Ceia", "Palavra", "Dízimo"] as const).map(category => <label key={category}>{category} — imagem padrão
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => {
+          const file = e.target.files?.[0]; if (!file) return;
+          if (!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)) { setNotice("Escolha JPG, PNG, WEBP ou GIF."); e.target.value = ""; return; }
+          if (file.size > 6 * 1024 * 1024) { setNotice("A imagem deve ter até 6 MB."); e.target.value = ""; return; }
+          const reader = new FileReader();
+          reader.onload = () => setGroupBackgrounds(v => ({ ...v, [category]: String(reader.result ?? "") }));
+          reader.onerror = () => setNotice("Não foi possível ler essa imagem.");
+          reader.readAsDataURL(file);
+        }} />
+        {groupBackgrounds[category] && <div className="importbox"><strong>Imagem padrão selecionada</strong><img src={groupBackgrounds[category]} alt={"Fundo padrão " + category} style={{display:"block",width:"100%",maxHeight:150,objectFit:"contain",marginTop:8,borderRadius:8}}/><button className="ghost" style={{marginTop:8}} onClick={() => setGroupBackgrounds(v => ({ ...v, [category]: "" }))}>Remover imagem</button></div>}
+      </label>)}
+      <button className="primary" onClick={() => postMessage({ type: "save-group-backgrounds", groupBackgrounds })}>Salvar imagens padrão</button>
+    </section>
+    <section className="card">
       <small>INTEGRAÇÃO SPRESENTER</small><h2>Camadas e saída</h2>
       <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
       <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
@@ -130,7 +149,7 @@ export function App() {
       <label>Importar texto da camada<select value={captureLayer} onChange={e => setCaptureLayer(e.target.value)}>{layerOptions}</select></label>
       <p className="hint">A seleção da Bíblia nativa é importada após o versículo ser colocado ao vivo. A API pública documentada não expõe leitura direta da lista interna de traduções e versículos.</p>
       <button className="primary" onClick={() => postMessage({ type: "open-bible" })}>Abrir painel Bíblia</button>
-    </section>}
+    </section></>}
     <footer>SHALOM COMUNIDADE CRISTÃ <span>•</span> v0.4.0</footer>
   </main>;
 }
