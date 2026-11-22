@@ -2,6 +2,8 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type UiMessage = { type: string; [key: string]: any };
 
 const STORE_KEY = "shalom.verses.v1";
+const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
+type GroupBackgrounds = { Ceia: string; Palavra: string; Dízimo: string };
 const PLUGIN_TAG = "[Shalom Bíblia]";
 const prepared = new Set<string>();
 const previousBackgrounds = new Map<string, unknown>();
@@ -116,7 +118,10 @@ async function present(msg: UiMessage) {
   spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
 
   try {
-    const resolvedBackground = await resolveBackground(verse.background ?? "");
+    const defaults = await spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY);
+    const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
+    const defaultBackground = category ? defaults?.[category as keyof GroupBackgrounds] : "";
+    const resolvedBackground = await resolveBackground(verse.background || defaultBackground || "");
     await ensureStage(output, backgroundLayer, "background");
     spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
     spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
@@ -174,6 +179,12 @@ spresenter.ui.onmessage = async (raw: unknown) => {
   if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
   try {
     if (msg.type === "init") await sendState();
+    else if (msg.type === "save-group-backgrounds") {
+      const backgrounds = msg.groupBackgrounds as GroupBackgrounds;
+      await spresenter.storage.set(GROUP_BACKGROUNDS_KEY, backgrounds);
+      await sendState();
+      spresenter.ui.postMessage({ type: "notice", message: "Imagens padrão de Ceia, Palavra e Dízimo salvas." });
+    }
     else if (msg.type === "save-verse") {
       const verse = msg.verse as Verse;
       if (!verse?.id || !verse.reference?.trim() || !verse.text?.trim()) throw new Error("Preencha referência e texto.");
