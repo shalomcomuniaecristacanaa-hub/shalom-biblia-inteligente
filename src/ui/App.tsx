@@ -23,6 +23,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
   const [groupBackgrounds, setGroupBackgrounds] = useState({ Ceia: "", Palavra: "", "Dízimo": "" });
+  const [backgroundCategory, setBackgroundCategory] = useState("Palavra");
 
   useEffect(() => {
     const off = onMessage(raw => {
@@ -82,6 +83,15 @@ export function App() {
     </nav>
     {notice && <div className="notice" onClick={() => setNotice("")}>{notice}<button>×</button></div>}
     {tab === "favorites" && <>
+      <section className="card">
+        <small>FUNDO DA MINISTRAÇÃO</small>
+        <h2>Enviar somente o fundo</h2>
+        <p className="hint">Escolha a categoria para projetar sua imagem padrão sem enviar ou alterar o versículo na camada Conteúdo.</p>
+        <label>Categoria<select value={backgroundCategory} onChange={e => setBackgroundCategory(e.target.value)}>
+          <option value="Ceia">Ceia</option><option value="Palavra">Palavra</option><option value="Dízimo">Dízimo</option>
+        </select></label>
+        <button className="wide primary" onClick={() => postMessage({ type: "present-category-background", category: backgroundCategory, output, backgroundLayer })}>Enviar somente fundo</button>
+      </section>
       <section className="card livebar">
         <div><small>DESTINO DA PROJEÇÃO</small><strong>Saída {output}</strong></div>
         <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
