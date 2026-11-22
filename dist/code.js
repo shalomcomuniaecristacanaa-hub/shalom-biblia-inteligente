@@ -1,6 +1,7 @@
 (function() {
   "use strict";
   const STORE_KEY = "shalom.verses.v1";
+  const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
   const previousBackgrounds = /* @__PURE__ */ new Map();
@@ -113,7 +114,10 @@
     await ensureStage(output, contentLayer, "content");
     spresenter.live.element(output, contentLayer, "shalom-verse").setHtml(verseHtml(verse));
     try {
-      const resolvedBackground = await resolveBackground(verse.background ?? "");
+      const defaults = await spresenter.storage.get(GROUP_BACKGROUNDS_KEY);
+      const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
+      const defaultBackground = category ? defaults?.[category] : "";
+      const resolvedBackground = await resolveBackground(verse.background || defaultBackground || "");
       await ensureStage(output, backgroundLayer, "background");
       spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
       spresenter.ui.postMessage({ type: "presented", reference: verse.reference, background: "ok" });
@@ -161,7 +165,12 @@
     if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
     try {
       if (msg.type === "init") await sendState();
-      else if (msg.type === "save-verse") {
+      else if (msg.type === "save-group-backgrounds") {
+        const backgrounds = msg.groupBackgrounds;
+        await spresenter.storage.set(GROUP_BACKGROUNDS_KEY, backgrounds);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Imagens padrão de Ceia, Palavra e Dízimo salvas." });
+      } else if (msg.type === "save-verse") {
         const verse = msg.verse;
         if (!verse?.id || !verse.reference?.trim() || !verse.text?.trim()) throw new Error("Preencha referência e texto.");
         const verses = await getVerses();
