@@ -117,7 +117,8 @@
     try {
       const defaults = await spresenter.storage.get(GROUP_BACKGROUNDS_KEY);
       const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
-      const defaultBackground = category ? defaults?.[category] : "";
+      const categoryBackground = category ? defaults?.[category] : "";
+      const defaultBackground = categoryBackground || defaults?.Palavra || "";
       const resolvedBackground = await resolveBackground(verse.background || defaultBackground || "");
       await ensureStage(output, backgroundLayer, "background");
       spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
