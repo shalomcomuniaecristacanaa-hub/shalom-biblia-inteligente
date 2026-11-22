@@ -121,7 +121,10 @@ async function present(msg: UiMessage) {
   try {
     const defaults = await spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY);
     const category = /ceia/i.test(verse.group) ? "Ceia" : /d[ií]zimo/i.test(verse.group) ? "Dízimo" : /palavra/i.test(verse.group) ? "Palavra" : "";
-    const defaultBackground = category ? defaults?.[category as keyof GroupBackgrounds] : "";
+    // Prioridade: imagem específica do versículo, imagem padrão da categoria
+    // e, se não houver nenhuma, usar sempre a imagem padrão de Palavra.
+    const categoryBackground = category ? defaults?.[category as keyof GroupBackgrounds] : "";
+    const defaultBackground = categoryBackground || defaults?.Palavra || "";
     const resolvedBackground = await resolveBackground(verse.background || defaultBackground || "");
     await ensureStage(output, backgroundLayer, "background");
     spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolvedBackground, verse.theme ?? ""));
