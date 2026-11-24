@@ -171,16 +171,63 @@
   async function listLibrary(msg) {
     const requested = String(msg.assetType ?? "all");
     const assets = await spresenter.assets.list(requested === "all" ? void 0 : { type: requested });
-    spresenter.ui.postMessage({
-      type: "library-found",
-      assets: (assets ?? []).map((asset) => ({
+    const visualAssets = (assets ?? []).filter(
+      (asset) => ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase())
+    );
+    const mapped = await Promise.all((assets ?? []).map(async (asset) => {
+      let thumbnail = asset.thumbnailUrl ?? asset.thumbnail ?? asset.artwork ?? "";
+      if (!thumbnail && visualAssets.some((item) => item.guid === asset.guid)) {
+        try {
+          thumbnail = await spresenter.thumbnails.render({
+            title: asset.title ?? asset.name ?? "Mídia",
+            asset: { guid: asset.guid, type: asset.type }
+          }, 320, 180) ?? "";
+        } catch {
+          thumbnail = "";
+        }
+      }
+      return {
         guid: asset.guid,
         title: asset.title,
         name: asset.name,
         type: asset.type,
         artist: asset.artist,
-        author: asset.author
-      }))
+        author: asset.author,
+        extension: asset.extension,
+        thumbnail
+      };
+    }));
+    spresenter.ui.postMessage({ type: "library-found", assets: mapped });
+  }
+  async function presentLibraryBackground(msg) {
+    const guid = String(msg.guid ?? "");
+    const output = String(msg.output ?? "0");
+    const layer = Number(msg.backgroundLayer);
+    if (!guid || !Number.isInteger(layer)) throw new Error("Selecione uma mídia local e a camada Fundo.");
+    const asset = await spresenter.assets.get(guid);
+    if (!asset) throw new Error("Não encontrei essa mídia na biblioteca do SPresenter.");
+    const originalType = String(asset.type ?? "");
+    if (!["image", "video", "backgroundVideo"].includes(originalType.toLowerCase())) {
+      throw new Error("Selecione uma imagem ou vídeo da biblioteca local.");
+    }
+    const type = originalType.toLowerCase() === "video" ? "backgroundVideo" : originalType;
+    const data = asset.data ?? {};
+    const presentation = asset.presentation ?? {
+      title: asset.title ?? asset.name ?? "Fundo local",
+      asset: { guid, type },
+      theme: asset.theme ?? data.theme ?? data.presentation?.theme,
+      props: data.props ?? {}
+    };
+    if (type === "image" && !presentation.theme) {
+      throw new Error("O SPresenter não forneceu o tema de exibição dessa imagem pelo SDK. Abra a mídia no painel nativo para verificar; não alterei o telão.");
+    }
+    await spresenter.live.apply(output, layer, presentation);
+    await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+    spresenter.ui.postMessage({
+      type: "background-presented",
+      guid,
+      title: asset.title ?? asset.name ?? "Mídia local",
+      message: "Fundo local enviado à camada Fundo."
     });
   }
   async function searchSongs(msg) {
@@ -214,7 +261,7 @@
     if (!guid || !Number.isInteger(layer) || !Number.isInteger(index)) throw new Error("Selecione um louvor e uma camada Conteúdo válidos.");
     await spresenter.live.setMusicVerse(output, layer, guid, index);
     await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
-    spresenter.ui.postMessage({ type: "presented", message: "Louvor enviado para o telão." });
+    spresenter.ui.postMessage({ type: "presented", guid, index, message: "Parte do louvor enviada para o telão." });
   }
   async function presentMessage(msg) {
     const output = String(msg.output ?? "0");
@@ -277,6 +324,7 @@
         spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
       } else if (msg.type === "present") await present(msg);
       else if (msg.type === "list-library") await listLibrary(msg);
+      else if (msg.type === "present-library-background") await presentLibraryBackground(msg);
       else if (msg.type === "search-songs") await searchSongs(msg);
       else if (msg.type === "get-song-sections") await getSongSections(msg);
       else if (msg.type === "present-song") await presentSong(msg);
