@@ -51,7 +51,8 @@ export function App() {
         setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
       }
       if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
-      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }\n      if (m.type === "library-found") { setLibraryAssets(m.assets ?? []); setLoadingLibrary(false); }
+      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }
+      if (m.type === "library-found") { setLibraryAssets(m.assets ?? []); setLoadingLibrary(false); }
       if (m.type === "song-sections") setSongSections(v => ({ ...v, [m.guid]: m.sections ?? [] }));
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
       if (m.type === "error") setBusy(false);
