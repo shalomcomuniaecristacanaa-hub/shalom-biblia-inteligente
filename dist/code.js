@@ -186,14 +186,18 @@
   async function searchSongs(msg) {
     const query = String(msg.query ?? "").trim();
     if (!query) throw new Error("Digite o nome de um louvor.");
-    const songs = await spresenter.assets.search(query, { type: "music" });
-    spresenter.ui.postMessage({ type: "songs-found", songs: (songs ?? []).map((song) => ({
-      guid: song.guid,
-      title: song.title,
-      name: song.name,
-      artist: song.artist,
-      author: song.author
-    })) });
+    try {
+      const songs = await spresenter.assets.search(query, { type: "music" });
+      spresenter.ui.postMessage({ type: "songs-found", query, songs: (songs ?? []).map((song) => ({
+        guid: song.guid,
+        title: song.title,
+        name: song.name,
+        artist: song.artist,
+        author: song.author
+      })) });
+    } catch (error) {
+      spresenter.ui.postMessage({ type: "songs-found", query, songs: [], localError: error instanceof Error ? error.message : String(error) });
+    }
   }
   async function getSongSections(msg) {
     const guid = String(msg.guid ?? "");
