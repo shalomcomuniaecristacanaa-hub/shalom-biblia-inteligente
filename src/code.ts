@@ -187,44 +187,69 @@ function startBibleWatch() {
 async function listLibrary(msg: UiMessage) {
   const requested = String(msg.assetType ?? "all");
   const assets = await spresenter.assets.list(requested === "all" ? undefined : { type: requested });
-  const visualAssets = (assets ?? []).filter((asset: any) =>
-    ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase())
-  );
-  const mapped = await Promise.all((assets ?? []).map(async (asset: any) => {
+  const allAssets: any[] = [...(assets ?? [])];
+
+  // A biblioteca Worshipwide também pode aparecer no setlist ativo. O SDK
+  // documenta o identificador worshipwide/<arquivo>, mas não expõe um método
+  // próprio para enumerar todo o catálogo remoto; por isso reunimos os itens
+  // Worshipwide já adicionados ao setlist sem inventar uma listagem completa.
+  try {
+    const active = await spresenter.setlists.getActive();
+    const setlist = (active as any)?.setlist ?? active;
+    const scheduled = (setlist?.schedules ?? []).flatMap((group: any) => group?.assets ?? []);
+    const loose = setlist?.assets ?? [];
+    for (const item of [...scheduled, ...loose]) {
+      if (item?.guid && !allAssets.some((existing: any) => existing.guid === item.guid)) {
+        allAssets.push(item);
+      }
+    }
+  } catch { /* setlist ausente ou indisponível: mantém a biblioteca local */ }
+
+  const isVisual = (asset: any) => {
+    const type = String(asset?.type ?? "").toLowerCase();
+    const guid = String(asset?.guid ?? "");
+    return ["image", "video", "backgroundvideo", "motion", "motionbackground", "animatedbackground"].includes(type)
+      || guid.startsWith("worshipwide/");
+  };
+  const mapped = await Promise.all(allAssets.map(async (asset: any) => {
     let thumbnail = asset.thumbnailUrl ?? asset.thumbnail ?? asset.artwork ?? "";
-    if (!thumbnail && visualAssets.some((item: any) => item.guid === asset.guid)) {
+    if (!thumbnail && isVisual(asset) && asset.guid) {
       try {
+        const type = String(asset.type ?? "").toLowerCase();
         thumbnail = await spresenter.thumbnails.render({
-          title: asset.title ?? asset.name ?? "Mídia",
-          asset: { guid: asset.guid, type: asset.type }
+          title: asset.title ?? asset.name ?? "Fundo",
+          asset: { guid: asset.guid, type: asset.guid.startsWith("worshipwide/") ? "backgroundVideo" : (type || "backgroundVideo") }
         }, 320, 180) ?? "";
       } catch { thumbnail = ""; }
     }
     return {
       guid: asset.guid, title: asset.title, name: asset.name,
-      type: asset.type, artist: asset.artist, author: asset.author,
+      type: asset.guid?.startsWith("worshipwide/") ? "worshipwide" : asset.type,
+      artist: asset.artist, author: asset.author,
       extension: asset.extension, thumbnail
     };
   }));
-  spresenter.ui.postMessage({ type: "library-found", assets: mapped });
+  const filtered = requested === "all" ? mapped : mapped.filter((asset: any) => String(asset.type ?? "") === requested);
+  spresenter.ui.postMessage({ type: "library-found", assets: filtered });
 }
 async function presentLibraryBackground(msg: UiMessage) {
   const guid = String(msg.guid ?? "");
   const output = String(msg.output ?? "0");
   const layer = Number(msg.backgroundLayer);
   if (!guid || !Number.isInteger(layer)) throw new Error("Selecione uma mídia local e a camada Fundo.");
-  const asset = await spresenter.assets.get(guid);
-  if (!asset) throw new Error("Não encontrei essa mídia na biblioteca do SPresenter.");
-  const originalType = String((asset as any).type ?? "");
-  if (!["image", "video", "backgroundVideo"].includes(originalType.toLowerCase())) {
-    throw new Error("Selecione uma imagem ou vídeo da biblioteca local.");
+  const isWorshipwide = guid.startsWith("worshipwide/");
+  const asset = isWorshipwide ? null : await spresenter.assets.get(guid);
+  if (!asset && !isWorshipwide) throw new Error("Não encontrei essa mídia na biblioteca do SPresenter.");
+  const originalType = String((asset as any)?.type ?? (isWorshipwide ? "backgroundVideo" : ""));
+  if (!isWorshipwide && !["image", "video", "backgroundVideo", "motion", "motionBackground", "animatedBackground"].includes(originalType.toLowerCase())) {
+    throw new Error("Selecione uma imagem, vídeo ou fundo animado da biblioteca.");
   }
-  const type = originalType.toLowerCase() === "video" ? "backgroundVideo" : originalType;
-  const data = (asset as any).data ?? {};
-  const presentation = (asset as any).presentation ?? {
-    title: (asset as any).title ?? (asset as any).name ?? "Fundo local",
+  const type = isWorshipwide || originalType.toLowerCase() === "video" ? "backgroundVideo" : originalType;
+  const data = (asset as any)?.data ?? {};
+  const presentation = (asset as any)?.presentation ?? {
+    title: (asset as any)?.title ?? (asset as any)?.name ?? (isWorshipwide ? "Fundo Worshipwide" : "Fundo local"),
     asset: { guid, type },
-    theme: (asset as any).theme ?? data.theme ?? data.presentation?.theme,
+    theme: (asset as any)?.theme ?? data.theme ?? data.presentation?.theme,
     props: data.props ?? {}
   };
   if (type === "image" && !presentation.theme) {
@@ -233,7 +258,7 @@ async function presentLibraryBackground(msg: UiMessage) {
   await spresenter.live.apply(output, layer, presentation);
   await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
   spresenter.ui.postMessage({
-    type: "background-presented", guid, title: (asset as any).title ?? (asset as any).name ?? "Mídia local",
+    type: "background-presented", guid, title: (asset as any)?.title ?? (asset as any)?.name ?? (isWorshipwide ? "Fundo Worshipwide" : "Mídia local"),
     message: "Fundo local enviado à camada Fundo."
   });
 }
