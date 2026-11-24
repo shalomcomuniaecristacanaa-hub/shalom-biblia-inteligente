@@ -173,6 +173,15 @@ export function App() {
     {tab === "add" && <section className="card">
       <div className="section-title"><div><small>BIBLIOTECA PESSOAL</small><h2>{editing ? "Editar favorito" : "Adicionar versículo"}</h2></div></div>
       <div className="importbox"><strong>Importar da Bíblia do SPresenter</strong><p>Abra a Bíblia nativa, coloque o versículo desejado na camada Conteúdo e importe o que estiver ao vivo.</p><div className="actions"><button className="ghost" onClick={() => postMessage({ type: "open-bible" })}>Abrir Bíblia do SPresenter</button><button className="primary" onClick={() => postMessage({ type: "capture-live", output, captureLayer })}>Importar do Conteúdo</button></div></div>
+      {verse.text.trim() && <div className="preview-card">
+        <div className="preview-heading"><div><small>PRÉVIA DO TELÃO</small><strong>Confira antes de enviar</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
+        <div className="verse-screen-preview">
+          <div className="screen-verse-text">{verse.text}</div>
+          <div className="screen-verse-reference">{verse.reference || "Referência não informada"}</div>
+        </div>
+        <p className="hint">Esta é uma prévia dentro do plugin. Ela não altera a transmissão nem substitui o fundo que já está programado no SPresenter.</p>
+        <button className="primary wide" disabled={!verse.reference.trim() || !verse.text.trim() || busy} onClick={() => present(verse)}>{busy ? "Enviando..." : "▶ Enviar para os telões"}</button>
+      </div>}
       <label>Livro bíblico<input value={verse.book || ""} onChange={e => setVerse({ ...verse, book: e.target.value })} placeholder="Preenchido automaticamente ao importar" /></label>\n      <label>Referência bíblica<input value={verse.reference} onChange={e => setVerse({ ...verse, reference: e.target.value })} placeholder="Ex.: João 3:16" /></label>
       <label>Texto do versículo<textarea rows={5} value={verse.text} onChange={e => setVerse({ ...verse, text: e.target.value })} placeholder="Cole ou digite o texto bíblico..." /></label>
       <div className="twocol"><label>Categoria<select value={verse.group || "Geral"} onChange={e => setVerse({ ...verse, group: e.target.value })}><option value="Geral">Geral</option><option value="Ceia">Ceia</option><option value="Palavra">Palavra</option><option value="Dízimo">Dízimo</option></select></label><label>Tema<input value={verse.theme} onChange={e => setVerse({ ...verse, theme: e.target.value })} placeholder="Ex.: Fé, esperança" /></label></div>
