@@ -121,7 +121,7 @@ export function App() {
       if (m.type === "library-found") {
         const assets = m.assets ?? [];
         setLibraryAssets(assets); setLoadingLibrary(false);
-        const firstVisual = assets.find((asset: any) => ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase()));
+        const firstVisual = assets.find((asset: any) => ["image", "video", "backgroundvideo", "motion", "motionbackground", "animatedbackground", "worshipwide"].includes(String(asset.type ?? "").toLowerCase()) || String(asset.guid ?? "").startsWith("worshipwide/"));
         if (firstVisual) setSelectedBackgroundGuid((current: string) => current || firstVisual.guid);
       }
       if (m.type === "background-presented") {
@@ -192,7 +192,8 @@ export function App() {
   }
   const layerOptions = layers.map(l => <option key={l.index} value={String(l.index)}>{l.name || "Camada " + l.index} (#{l.index})</option>);
 
-  const visualAssets = libraryAssets.filter((asset: any) => ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase()));
+  const isVisualAsset = (asset: any) => ["image", "video", "backgroundvideo", "motion", "motionbackground", "animatedbackground", "worshipwide"].includes(String(asset.type ?? "").toLowerCase()) || String(asset.guid ?? "").startsWith("worshipwide/");
+  const visualAssets = libraryAssets.filter(isVisualAsset);
   const selectedBackgroundAsset = visualAssets.find((asset: any) => asset.guid === selectedBackgroundGuid) ?? null;
 
   return <main onClick={() => { if (contextVerse) setContextVerse(null); }}>
@@ -252,12 +253,12 @@ export function App() {
         <p className="hint">A busca online mostra título, artista e álbum, com link para a loja. Letras protegidas por direitos autorais não são copiadas automaticamente; louvores cadastrados localmente continuam com prévia e envio direto.</p>
       </section>
       <section className="card">
-        <small>FUNDOS LOCAIS DO SPRESENTER</small><h2>Imagem ou vídeo para o louvor</h2>
-        <p className="hint">Escolha uma mídia já cadastrada na biblioteca do SPresenter. A prévia não altera o telão; somente o botão de envio muda a camada Fundo.</p>
+        <small>FUNDOS E MOTIONS DO SPRESENTER</small><h2>Imagens, vídeos e Worshipwide</h2>
+        <p className="hint">Escolha imagens, vídeos e motions disponíveis na biblioteca local ou já adicionados ao setlist ativo. A prévia não altera o telão; somente o botão de envio muda a camada Fundo.</p>
         <button className="ghost" disabled={loadingLibrary} onClick={() => { setLoadingLibrary(true); postMessage({ type: "list-library", assetType: "all" }); }}>{loadingLibrary ? "Carregando biblioteca..." : "Atualizar mídias locais"}</button>
         <label>Mídia da biblioteca<select value={selectedBackgroundGuid} onChange={e => setSelectedBackgroundGuid(e.target.value)}>
-          <option value="">Selecione uma imagem ou vídeo...</option>
-          {visualAssets.map((asset: any) => <option key={asset.guid} value={asset.guid}>{asset.title || asset.name || "Mídia sem título"} · {asset.type === "backgroundVideo" || asset.type === "video" ? "Vídeo" : "Imagem"}</option>)}
+          <option value="">Selecione imagem, vídeo ou fundo animado...</option>
+          {visualAssets.map((asset: any) => <option key={asset.guid} value={asset.guid}>{asset.title || asset.name || "Mídia sem título"} · {asset.type === "worshipwide" ? "Worshipwide / Motion" : asset.type === "backgroundVideo" || asset.type === "video" ? "Vídeo / Fundo animado" : asset.type}</option>)}
         </select></label>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,marginTop:12}}>
           <div className="importbox">
@@ -276,7 +277,7 @@ export function App() {
             </> : <p className="hint">Nenhuma mídia enviada por este painel nesta sessão.</p>}
           </div>
         </div>
-        <p className="hint">A lista inclui imagens e vídeos locais que o SPresenter devolver pela biblioteca. O envio usa a camada Fundo escolhida abaixo e preserva a camada Conteúdo do louvor.</p>
+        <p className="hint">A lista inclui mídias locais e itens Worshipwide encontrados no setlist ativo. O catálogo Worshipwide completo não possui, na API pública documentada, uma operação de listagem para plugins; adicione o motion ao setlist do SPresenter para ele aparecer aqui. O envio usa a camada Fundo e preserva a camada Conteúdo do louvor.</p>
       </section>
       <section className="card">
         <small>COMUNICAÇÃO COM A IGREJA</small><h2>Mensagem informativa</h2>
