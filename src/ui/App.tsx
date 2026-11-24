@@ -18,7 +18,13 @@ export function App() {
   const [contentLayer, setContentLayer] = useState("0");
   const [backgroundLayer, setBackgroundLayer] = useState("1");
   const [captureLayer, setCaptureLayer] = useState("0");
-  const [tab, setTab] = useState<"favorites" | "add" | "settings">("favorites");
+  const [tab, setTab] = useState<"live" | "favorites" | "add" | "settings">("live");
+  const [bibleReference, setBibleReference] = useState("");
+  const [songQuery, setSongQuery] = useState("");
+  const [songs, setSongs] = useState<any[]>([]);
+  const [songSections, setSongSections] = useState<Record<string, any[]>>({});
+  const [messageText, setMessageText] = useState("");
+  const [searchingSongs, setSearchingSongs] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
@@ -41,7 +47,9 @@ export function App() {
         setVerse(v => ({ ...v, reference: m.reference || "", book: m.book || "", text: m.text || "" }));
         setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
       }
-      if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + m.reference);
+      if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
+      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }
+      if (m.type === "song-sections") setSongSections(v => ({ ...v, [m.guid]: m.sections ?? [] }));
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
       if (m.type === "error") setBusy(false);
       if (m.type === "presented") setBusy(false);
@@ -82,6 +90,42 @@ export function App() {
       <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configuração</button>
     </nav>
     {notice && <div className="notice" onClick={() => setNotice("")}>{notice}<button>×</button></div>}
+    {tab === "live" && <>
+      <section className="card">
+        <small>CONTROLE DURANTE O CULTO</small><h2>Bíblia</h2>
+        <p className="hint">Informe a referência para localizar rapidamente o texto no painel bíblico nativo do SPresenter.</p>
+        <label>Livro, capítulo e versículo<input value={bibleReference} onChange={e => setBibleReference(e.target.value)} placeholder="Ex.: João 3:16 ou Salmos 23:1-6" /></label>
+        <button className="primary" onClick={() => postMessage({ type: "open-bible", reference: bibleReference })}>Abrir Bíblia do SPresenter</button>
+        <p className="hint">A API pública do SPresenter não oferece busca programática na base bíblica; a seleção e a projeção do versículo continuam no painel Bíblia nativo.</p>
+      </section>
+      <section className="card">
+        <small>BIBLIOTECA DO SPRESENTER</small><h2>Louvores cadastrados</h2>
+        <label>Buscar música<input value={songQuery} onChange={e => setSongQuery(e.target.value)} placeholder="Digite o nome do louvor..." onKeyDown={e => { if (e.key === "Enter" && songQuery.trim()) { setSearchingSongs(true); postMessage({ type: "search-songs", query: songQuery.trim() }); } }} /></label>
+        <button className="primary" disabled={!songQuery.trim() || searchingSongs} onClick={() => { setSearchingSongs(true); postMessage({ type: "search-songs", query: songQuery.trim() }); }}>{searchingSongs ? "Buscando..." : "Buscar louvores"}</button>
+        {songs.map(song => <div className="verse" key={song.guid}><div className="verse-head"><div><strong>{song.title || song.name}</strong><small>{song.artist || song.author || "Louvor cadastrado"}</small></div><button className="go" onClick={() => postMessage({ type: "get-song-sections", guid: song.guid })}>Ver partes</button></div>
+          {(songSections[song.guid] || []).map((section: any, index: number) => <button className="ghost" key={index} style={{margin:"5px 5px 0 0"}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>{section.type || "Parte"} {index + 1} — Apresentar</button>)}
+          <button className="primary" style={{marginTop:8}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index: 0, output, contentLayer })}>▶ Apresentar louvor</button>
+        </div>)}
+        {!songs.length && <p className="hint">Pesquise para listar as músicas encontradas na biblioteca do SPresenter.</p>}
+      </section>
+      <section className="card">
+        <small>COMUNICAÇÃO COM A IGREJA</small><h2>Mensagem informativa</h2>
+        <label>Texto para o telão<textarea rows={4} value={messageText} onChange={e => setMessageText(e.target.value)} placeholder="Ex.: Atenção: após o culto teremos reunião..." /></label>
+        <button className="primary" disabled={!messageText.trim()} onClick={() => postMessage({ type: "present-message", text: messageText, output, contentLayer })}>Apresentar mensagem</button>
+        <button className="ghost" style={{marginLeft:8}} onClick={() => postMessage({ type: "clear-content", output, contentLayer })}>Retirar mensagem</button>
+      </section>
+      <section className="card">
+        <small>APRESENTAÇÕES MULTIMÍDIA</small><h2>PowerPoint com vídeos</h2>
+        <p className="hint">O SDK público atual não documenta importação nem controle de arquivos .ppt/.pptx pelo plugin. Para preservar vídeos, transições e avanço de slides, abra a apresentação no recurso nativo de apresentações do SPresenter após importá-la por lá.</p>
+        <button className="ghost" onClick={() => postMessage({ type: "open-media" })}>Abrir painel de mídia do SPresenter</button>
+        <p className="hint">Não vou simular um carregamento de PowerPoint que não consiga reproduzir os vídeos corretamente.</p>
+      </section>
+      <section className="card livebar">
+        <small>SAÍDA E CAMADA DE CONTEÚDO</small>
+        <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
+        <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
+      </section>
+    </>}
     {tab === "favorites" && <>
       <section className="card">
         <small>FUNDO DA MINISTRAÇÃO</small>
