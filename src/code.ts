@@ -201,12 +201,12 @@ async function searchSongs(msg: UiMessage) {
   if (!query) throw new Error("Digite o nome de um louvor.");
   try {
     const songs = await spresenter.assets.search(query, { type: "music" });
-    spresenter.ui.postMessage({ type: "songs-found", songs: (songs ?? []).map((song: any) => ({
+    spresenter.ui.postMessage({ type: "songs-found", query, songs: (songs ?? []).map((song: any) => ({
       guid: song.guid, title: song.title, name: song.name, artist: song.artist, author: song.author
     })) });
   } catch (error) {
     // Uma falha na pesquisa local também permite que a interface tente a busca online.
-    spresenter.ui.postMessage({ type: "songs-found", songs: [], localError: error instanceof Error ? error.message : String(error) });
+    spresenter.ui.postMessage({ type: "songs-found", query, songs: [], localError: error instanceof Error ? error.message : String(error) });
   }
 }
 async function getSongSections(msg: UiMessage) {
