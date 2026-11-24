@@ -12,7 +12,8 @@
     "outputs:read",
     "live:read",
     "live:write",
-    "assets:write",\n    "assets:read",
+    "assets:read",
+    "assets:write",
     "net:connect",
     "ui:write"
   ],
