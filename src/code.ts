@@ -187,12 +187,54 @@ function startBibleWatch() {
 async function listLibrary(msg: UiMessage) {
   const requested = String(msg.assetType ?? "all");
   const assets = await spresenter.assets.list(requested === "all" ? undefined : { type: requested });
-  spresenter.ui.postMessage({
-    type: "library-found",
-    assets: (assets ?? []).map((asset: any) => ({
+  const visualAssets = (assets ?? []).filter((asset: any) =>
+    ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase())
+  );
+  const mapped = await Promise.all((assets ?? []).map(async (asset: any) => {
+    let thumbnail = asset.thumbnailUrl ?? asset.thumbnail ?? asset.artwork ?? "";
+    if (!thumbnail && visualAssets.some((item: any) => item.guid === asset.guid)) {
+      try {
+        thumbnail = await spresenter.thumbnails.render({
+          title: asset.title ?? asset.name ?? "Mídia",
+          asset: { guid: asset.guid, type: asset.type }
+        }, 320, 180) ?? "";
+      } catch { thumbnail = ""; }
+    }
+    return {
       guid: asset.guid, title: asset.title, name: asset.name,
-      type: asset.type, artist: asset.artist, author: asset.author
-    }))
+      type: asset.type, artist: asset.artist, author: asset.author,
+      extension: asset.extension, thumbnail
+    };
+  }));
+  spresenter.ui.postMessage({ type: "library-found", assets: mapped });
+}
+async function presentLibraryBackground(msg: UiMessage) {
+  const guid = String(msg.guid ?? "");
+  const output = String(msg.output ?? "0");
+  const layer = Number(msg.backgroundLayer);
+  if (!guid || !Number.isInteger(layer)) throw new Error("Selecione uma mídia local e a camada Fundo.");
+  const asset = await spresenter.assets.get(guid);
+  if (!asset) throw new Error("Não encontrei essa mídia na biblioteca do SPresenter.");
+  const originalType = String((asset as any).type ?? "");
+  if (!["image", "video", "backgroundVideo"].includes(originalType.toLowerCase())) {
+    throw new Error("Selecione uma imagem ou vídeo da biblioteca local.");
+  }
+  const type = originalType.toLowerCase() === "video" ? "backgroundVideo" : originalType;
+  const data = (asset as any).data ?? {};
+  const presentation = (asset as any).presentation ?? {
+    title: (asset as any).title ?? (asset as any).name ?? "Fundo local",
+    asset: { guid, type },
+    theme: (asset as any).theme ?? data.theme ?? data.presentation?.theme,
+    props: data.props ?? {}
+  };
+  if (type === "image" && !presentation.theme) {
+    throw new Error("O SPresenter não forneceu o tema de exibição dessa imagem pelo SDK. Abra a mídia no painel nativo para verificar; não alterei o telão.");
+  }
+  await spresenter.live.apply(output, layer, presentation);
+  await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+  spresenter.ui.postMessage({
+    type: "background-presented", guid, title: (asset as any).title ?? (asset as any).name ?? "Mídia local",
+    message: "Fundo local enviado à camada Fundo."
   });
 }
 
@@ -286,6 +328,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
     } else if (msg.type === "present") await present(msg);
     else if (msg.type === "list-library") await listLibrary(msg);
+    else if (msg.type === "present-library-background") await presentLibraryBackground(msg);
     else if (msg.type === "search-songs") await searchSongs(msg);
     else if (msg.type === "get-song-sections") await getSongSections(msg);
     else if (msg.type === "present-song") await presentSong(msg);
