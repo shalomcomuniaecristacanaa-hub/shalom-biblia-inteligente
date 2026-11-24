@@ -15,7 +15,8 @@
     "assets:read",
     "assets:write",
     "net:connect",
-    "ui:write"
+    "ui:write",
+    "setlists:read"
   ],
   "panels": [
     { "id": "main", "title": "Shalom Bíblia", "icon": "book-open" }
