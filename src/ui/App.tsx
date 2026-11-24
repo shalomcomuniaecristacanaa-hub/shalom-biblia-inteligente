@@ -4,6 +4,8 @@ import { onMessage, postMessage } from "@spresenter/plugin-sdk/ui";
 type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
+type EventSchedule = { id: string; name: string; date: string; time: string; coverGuid: string; song: string; grandmaCommand: string; vmixFunction: string; startStream: boolean; enabled: boolean };
+const blankSchedule = (): EventSchedule => ({ id: "", name: "", date: "", time: "", coverGuid: "", song: "", grandmaCommand: "", vmixFunction: "", startStream: false, enabled: true });
 const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "", book: "" });
 function sectionBody(section: any): string {
   const value = section?.text ?? section?.content ?? section?.lyrics ?? section?.value ?? "";
@@ -23,7 +25,7 @@ export function App() {
   const [contentLayer, setContentLayer] = useState("0");
   const [backgroundLayer, setBackgroundLayer] = useState("1");
   const [captureLayer, setCaptureLayer] = useState("0");
-  const [tab, setTab] = useState<"live" | "library" | "favorites" | "add" | "settings">("live");
+  const [tab, setTab] = useState<"dashboard" | "scheduler" | "live" | "library" | "favorites" | "add" | "settings">("dashboard");
   const [bibleReference, setBibleReference] = useState("");
   const [bibleVersion, setBibleVersion] = useState("nvi");
   const bibleVersions = [
@@ -58,12 +60,16 @@ export function App() {
   const [contextVerse, setContextVerse] = useState<string | null>(null);
   const [groupBackgrounds, setGroupBackgrounds] = useState({ Ceia: "", Palavra: "", "Dízimo": "" });
   const [backgroundCategory, setBackgroundCategory] = useState("Palavra");
+  const [eventSchedules, setEventSchedules] = useState<EventSchedule[]>([]);
+  const [scheduleDraft, setScheduleDraft] = useState<EventSchedule>(blankSchedule());
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [clockNow, setClockNow] = useState(Date.now());
 
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
       if (m.type === "state") {
-        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
         const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
         const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
@@ -135,6 +141,11 @@ export function App() {
     });
     postMessage({ type: "init" });
     return off;
+  }, []);
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setClockNow(Date.now()), 15000);
+    return () => window.clearInterval(clock);
   }, []);
 
   useEffect(() => {
@@ -217,6 +228,8 @@ export function App() {
     <header><div className="brand">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className="online" /></header>
     <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
     <nav>
+      <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>◷ Painel principal</button>
+      <button className={tab === "scheduler" ? "active" : ""} onClick={() => { setTab("scheduler"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); }}>＋ Cadastro de eventos</button>
       <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>● Culto ao Vivo</button>
       <button className={tab === "library" ? "active" : ""} onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({ type: "list-library", assetType: libraryType }); }}>▤ Biblioteca SPresenter</button>
       <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
@@ -224,6 +237,32 @@ export function App() {
       <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configurações</button>
     </nav>
     {notice && <div className="notice" onClick={() => setNotice("")}>{notice}<button>×</button></div>}
+
+    {tab === "dashboard" && <section className="dashboard-shell">
+      <div className="dashboard-heading"><div><small>SHALOM · CENTRAL DE AUTOMAÇÃO</small><h1>Painel de eventos</h1><p>Horários programados e ações previstas para a igreja.</p></div><div className="clock-card"><span>HORÁRIO LOCAL</span><strong>{new Date(clockNow).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong><small>{new Date(clockNow).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</small></div></div>
+      <div className="dashboard-toolbar"><div><strong>{eventSchedules.filter(e => e.enabled).length}</strong><span> eventos ativos</span></div><button className="primary" onClick={() => { setScheduleDraft(blankSchedule()); setEditingSchedule(false); setTab("scheduler"); }}>＋ Cadastrar evento</button></div>
+      {eventSchedules.filter(e => e.enabled).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)).filter(e => new Date(e.date+"T"+e.time).getTime() >= clockNow - 60000).length === 0
+        ? <div className="dashboard-empty"><div>◷</div><h2>Nenhum evento programado</h2><p>Quando você cadastrar um evento, o horário e todas as ações aparecerão aqui.</p><button className="primary" onClick={() => setTab("scheduler")}>Criar primeira programação</button></div>
+        : <div className="event-list">{eventSchedules.filter(e => e.enabled).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)).filter(e => new Date(e.date+"T"+e.time).getTime() >= clockNow - 60000).map(event => {
+          const when = new Date(event.date+"T"+event.time);
+          const minutes = Math.max(0, Math.floor((when.getTime()-clockNow)/60000));
+          const actions = [event.coverGuid && "Capa no SPresenter", event.grandmaCommand && "Cena de luzes · GrandMA2", event.song && "Louvor: "+event.song, event.vmixFunction && "Cena vMix: "+event.vmixFunction, event.startStream && "Iniciar transmissão"].filter(Boolean);
+          return <article className="event-card" key={event.id}><div className="event-time"><strong>{event.time}</strong><span>{when.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short"})}</span></div><div className="event-details"><h2>{event.name}</h2><p>{actions.length ? actions.join(" · ") : "Nenhuma ação cadastrada"}</p><small>{minutes === 0 ? "Horário chegando" : minutes < 60 ? "Em "+minutes+" min" : "Em "+Math.floor(minutes/60)+"h "+(minutes%60)+"min"}</small></div><span className="event-status">PROGRAMADO</span></article>;
+        })}</div>}
+      <p className="scheduler-note">As programações são salvas no SPresenter. A execução automática dos comandos externos depende da conexão local configurada com o GrandMA2 e o vMix.</p>
+    </section>}
+    {tab === "scheduler" && <section className="card scheduler-form">
+      <div className="section-title"><div><small>PROGRAMAÇÃO DO CULTO</small><h2>{editingSchedule ? "Editar evento" : "Cadastrar novo evento"}</h2></div><button className="ghost" onClick={() => { setEditingSchedule(false); setScheduleDraft(blankSchedule()); setTab("dashboard"); }}>Voltar ao painel</button></div>
+      <label>Nome do evento<input value={scheduleDraft.name} onChange={e => setScheduleDraft(v => ({...v,name:e.target.value}))} placeholder="Ex.: Culto de domingo à noite" /></label>
+      <div className="twocol"><label>Data<input type="date" value={scheduleDraft.date} onChange={e => setScheduleDraft(v => ({...v,date:e.target.value}))} /></label><label>Horário<input type="time" value={scheduleDraft.time} onChange={e => setScheduleDraft(v => ({...v,time:e.target.value}))} /></label></div>
+      <div className="scheduler-section"><h3>① SPresenter · Capa</h3><label>Imagem, vídeo ou motion<select value={scheduleDraft.coverGuid} onChange={e => setScheduleDraft(v => ({...v,coverGuid:e.target.value}))}><option value="">Não alterar a capa</option>{visualAssets.map((asset:any)=><option key={asset.guid} value={asset.guid}>{asset.title || asset.name || asset.guid}</option>)}</select></label><button className="ghost" onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({type:"list-library",assetType:"all"}); }}>Atualizar biblioteca de mídias</button></div>
+      <div className="scheduler-section"><h3>② GrandMA2 · Iluminação</h3><label>Comando da mesa<input value={scheduleDraft.grandmaCommand} onChange={e => setScheduleDraft(v => ({...v,grandmaCommand:e.target.value}))} placeholder="Ex.: Go Executor 1.1" /></label><p className="hint">Informe o comando do executor ou macro já preparado na mesa.</p></div>
+      <div className="scheduler-section"><h3>③ Louvor</h3><label>Louvor / identificação<input value={scheduleDraft.song} onChange={e => setScheduleDraft(v => ({...v,song:e.target.value}))} placeholder="Nome do louvor ou identificação na biblioteca" /></label></div>
+      <div className="scheduler-section"><h3>④ vMix · Câmera e transmissão</h3><label>Função / cena do vMix<input value={scheduleDraft.vmixFunction} onChange={e => setScheduleDraft(v => ({...v,vmixFunction:e.target.value}))} placeholder="Ex.: PreviewInput,1 ou Cut" /></label><label className="checkline"><input type="checkbox" checked={scheduleDraft.startStream} onChange={e => setScheduleDraft(v => ({...v,startStream:e.target.checked}))} /> Iniciar transmissão ao vivo neste horário</label></div>
+      <div className="actions"><button className="primary" disabled={!scheduleDraft.name.trim() || !scheduleDraft.date || !scheduleDraft.time} onClick={() => { postMessage({type:"save-event-schedule",schedule:{...scheduleDraft,id:scheduleDraft.id || Date.now().toString(36),enabled:true}}); setTab("dashboard"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); }}>{editingSchedule ? "Salvar alterações" : "Salvar programação"}</button><button className="ghost" onClick={() => { setScheduleDraft(blankSchedule()); setEditingSchedule(false); setTab("dashboard"); }}>Cancelar</button></div>
+      <p className="scheduler-note">O cadastro e o painel ficam disponíveis nesta versão. Antes de liberar execução automática, precisamos validar o canal de rede do GrandMA2 e do vMix para evitar disparos falsos.</p>
+      <div className="saved-schedules"><h3>Programações cadastradas</h3>{eventSchedules.length ? eventSchedules.map(event=><div className="saved-schedule" key={event.id}><div><strong>{event.name}</strong><small>{event.date.split("-").reverse().join("/")} às {event.time}</small></div><div className="actions"><button className="ghost" onClick={() => {setScheduleDraft(event);setEditingSchedule(true);}}>Editar</button><button className="danger" onClick={() => postMessage({type:"delete-event-schedule",id:event.id})}>Excluir</button></div></div>) : <p className="hint">Nenhuma programação salva ainda.</p>}</div>
+    </section>}
     {tab === "live" && <>
       <section className="card">
         <small>CONTROLE DURANTE O CULTO</small><h2>Bíblia</h2>
