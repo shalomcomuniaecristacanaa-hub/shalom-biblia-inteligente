@@ -145,6 +145,21 @@
     const text = textCandidates[0].slice(0, 3e3);
     spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3e3) });
   }
+  async function listLibrary(msg) {
+    const requested = String(msg.assetType ?? "all");
+    const assets = await spresenter.assets.list(requested === "all" ? void 0 : { type: requested });
+    spresenter.ui.postMessage({
+      type: "library-found",
+      assets: (assets ?? []).map((asset) => ({
+        guid: asset.guid,
+        title: asset.title,
+        name: asset.name,
+        type: asset.type,
+        artist: asset.artist,
+        author: asset.author
+      }))
+    });
+  }
   async function searchSongs(msg) {
     const query = String(msg.query ?? "").trim();
     if (!query) throw new Error("Digite o nome de um louvor.");
@@ -228,6 +243,7 @@
         spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolved, category));
         spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
       } else if (msg.type === "present") await present(msg);
+      else if (msg.type === "list-library") await listLibrary(msg);
       else if (msg.type === "search-songs") await searchSongs(msg);
       else if (msg.type === "get-song-sections") await getSongSections(msg);
       else if (msg.type === "present-song") await presentSong(msg);
