@@ -172,7 +172,8 @@ async function listLibrary(msg: UiMessage) {
     }))
   });
 }
-\nasync function searchSongs(msg: UiMessage) {
+
+async function searchSongs(msg: UiMessage) {
   const query = String(msg.query ?? "").trim();
   if (!query) throw new Error("Digite o nome de um louvor.");
   const songs = await spresenter.assets.search(query, { type: "music" });
