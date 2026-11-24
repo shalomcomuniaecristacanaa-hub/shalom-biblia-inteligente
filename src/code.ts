@@ -3,6 +3,7 @@ type UiMessage = { type: string; [key: string]: any };
 
 const STORE_KEY = "shalom.verses.v1";
 const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
+const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
 type GroupBackgrounds = { Ceia: string; Palavra: string; Dízimo: string };
 const PLUGIN_TAG = "[Shalom Bíblia]";
 const prepared = new Set<string>();
@@ -33,11 +34,12 @@ async function getVerses(): Promise<Verse[]> {
   return (await spresenter.storage.get<Verse[]>(STORE_KEY)) ?? [];
 }
 async function sendState() {
-  const [verses, outputs, layers, groupBackgrounds] = await Promise.all([
+  const [verses, outputs, layers, groupBackgrounds, eventSchedules] = await Promise.all([
     getVerses(), spresenter.outputs.list(), spresenter.layers.list(),
-    spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY)
+    spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY),
+    spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY)
   ]);
-  spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" } });
+  spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [] });
 }
 function stagePresentation(title: string, elementId: string) {
   return {
@@ -359,7 +361,21 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       lastBibleSnapshot = "";
       startBibleWatch();
     }
-    else if (msg.type === "save-group-backgrounds") {
+    else if (msg.type === "save-event-schedule") {
+      const schedule = msg.schedule;
+      if (!schedule?.id || !schedule.name?.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(schedule.date) || !/^\\d{2}:\\d{2}$/.test(schedule.time)) throw new Error("Informe nome, data e horário válidos para o evento.");
+      const schedules = await spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY) ?? [];
+      const index = schedules.findIndex((item: any) => item.id === schedule.id);
+      if (index >= 0) schedules[index] = schedule; else schedules.push(schedule);
+      await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+      await sendState();
+      spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
+    } else if (msg.type === "delete-event-schedule") {
+      const schedules = await spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY) ?? [];
+      await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules.filter((item: any) => item.id !== msg.id));
+      await sendState();
+      spresenter.ui.postMessage({ type: "notice", message: "Programação excluída." });
+    } else if (msg.type === "save-group-backgrounds") {
       const backgrounds = msg.groupBackgrounds as GroupBackgrounds;
       await spresenter.storage.set(GROUP_BACKGROUNDS_KEY, backgrounds);
       await sendState();
