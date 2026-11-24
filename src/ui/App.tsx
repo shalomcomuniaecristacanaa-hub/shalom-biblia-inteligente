@@ -20,6 +20,19 @@ export function App() {
   const [captureLayer, setCaptureLayer] = useState("0");
   const [tab, setTab] = useState<"live" | "library" | "favorites" | "add" | "settings">("live");
   const [bibleReference, setBibleReference] = useState("");
+  const [bibleVersion, setBibleVersion] = useState("nvi");
+  const bibleVersions = [
+    { id: "nvi", name: "NVI — Nova Versão Internacional" },
+    { id: "nvt", name: "NVT — Nova Versão Transformadora" },
+    { id: "ntlh", name: "NTLH — Nova Tradução na Linguagem de Hoje" },
+    { id: "acf", name: "ACF — Almeida Corrigida Fiel" },
+    { id: "aa", name: "AA — Almeida Atualizada" },
+    { id: "blivre", name: "BLivre — Bíblia Livre" },
+    { id: "alm1911", name: "ALM1911 — Almeida 1911" },
+    { id: "ol", name: "OL — O Livro" },
+    { id: "mens", name: "MENS — A Mensagem" },
+    { id: "as21", name: "AS21 — Almeida Século 21" }
+  ];
   const [bibleResult, setBibleResult] = useState<any | null>(null);
   const [bibleStatus, setBibleStatus] = useState("");
   const [songQuery, setSongQuery] = useState("");
@@ -82,7 +95,7 @@ export function App() {
         if (!book) throw new Error("Não reconheci esse livro bíblico. Confira a referência.");
         const chapter = Number(match[2]), first = Number(match[3] || 1), last = Number(match[4] || first);
         if (chapter < 1 || first < 1 || last < first || last-first > 5) throw new Error("Informe até seis versículos por consulta.");
-        const response = await window.fetch(`https://abibliadigital.api.br/api/verses/nvi/${book[1]}/${chapter}`);
+        const response = await window.fetch(`https://abibliadigital.api.br/api/verses/${bibleVersion}/${book[1]}/${chapter}`);
         if (!response.ok) throw new Error("A fonte bíblica não respondeu. Verifique sua conexão e tente novamente.");
         const payload = await response.json();
         const rows = Array.isArray(payload) ? payload : (payload.verses || payload.data?.verses || []);
@@ -95,7 +108,7 @@ export function App() {
       }
     }, 500);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [bibleReference]);
+  }, [bibleReference, bibleVersion]);
 
   const groups = useMemo(() => ["Todas", ...Array.from(new Set(verses.map(v => v.group || "Geral")))], [verses]);
   const filtered = useMemo(() => verses.filter(v =>
@@ -135,15 +148,18 @@ export function App() {
       <section className="card">
         <small>CONTROLE DURANTE O CULTO</small><h2>Bíblia</h2>
         <p className="hint">Digite a referência. O texto aparece automaticamente aqui embaixo, sem abrir outro painel e sem importar conteúdo.</p>
+        <label>Versão da Bíblia<select value={bibleVersion} onChange={e => { setBibleVersion(e.target.value); setBibleResult(null); }}>
+          {bibleVersions.map(version => <option key={version.id} value={version.id}>{version.name}</option>)}
+        </select></label>
         <label>Livro, capítulo e versículo<input value={bibleReference} onChange={e => setBibleReference(e.target.value)} placeholder="Ex.: João 3:16 ou Salmos 23:1-2" /></label>
         {bibleStatus && <p className="hint">{bibleStatus}</p>}
         {bibleResult && <div className="preview-card" style={{marginTop:14}}>
-          <div className="preview-heading"><div><small>PRÉVIA DO TEXTO BÍBLICO · NVI</small><strong>{bibleResult.reference}</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
+          <div className="preview-heading"><div><small>PRÉVIA DO TEXTO BÍBLICO · {bibleVersions.find(v => v.id === bibleVersion)?.id.toUpperCase()}</small><strong>{bibleResult.reference}</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
           <div className="screen-verse-text" style={{padding:"18px 12px",fontSize:20,lineHeight:1.55}}>{bibleResult.text}</div>
           <button className="primary wide" disabled={busy} onClick={() => present({id:"",reference:bibleResult.reference,text:bibleResult.text,book:bibleResult.book || "",group:"Geral",background:"",theme:""})}>{busy ? "Enviando..." : "▶ Enviar para os telões"}</button>
         </div>}
         {!bibleStatus && !bibleResult && bibleReference.trim() && <p className="hint">Digite uma referência completa, como João 3:16 ou João 3:16-17.</p>}
-        <p className="hint">A busca usa a Bíblia em português NVI. Pesquisar e visualizar nunca altera o conteúdo que está ao vivo.</p>
+        <p className="hint">A busca usa a tradução selecionada. As opções são versões oferecidas pela fonte bíblica externa; o SDK do SPresenter não permite consultar automaticamente as traduções instaladas nele. Pesquisar e visualizar nunca altera o conteúdo que está ao vivo.</p>
       </section>
       <section className="card">
         <small>BIBLIOTECA DO SPRESENTER</small><h2>Louvores cadastrados</h2>
