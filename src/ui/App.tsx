@@ -37,6 +37,8 @@ export function App() {
   const [bibleStatus, setBibleStatus] = useState("");
   const [songQuery, setSongQuery] = useState("");
   const [songs, setSongs] = useState<any[]>([]);
+  const [songSearchSource, setSongSearchSource] = useState<"local" | "online" | "">("");
+  const [songSearchStatus, setSongSearchStatus] = useState("");
   const [songSections, setSongSections] = useState<Record<string, any[]>>({});
   const [messageText, setMessageText] = useState("");
   const [searchingSongs, setSearchingSongs] = useState(false);
@@ -67,7 +69,29 @@ export function App() {
         setTab("add"); setNotice("Versículo da Bíblia do SPresenter atualizado automaticamente na prévia.");
       }
       if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
-      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }
+      if (m.type === "songs-found") {
+        const localSongs = m.songs ?? [];
+        if (localSongs.length) {
+          setSongs(localSongs); setSongSearchSource("local"); setSongSearchStatus("Encontrado na biblioteca local do SPresenter."); setSearchingSongs(false);
+        } else {
+          setSongs([]); setSongSearchSource("online"); setSongSearchStatus("Não encontrado localmente. Procurando no catálogo online…");
+          const term = songQuery.trim();
+          if (term) {
+            window.fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=br&media=music&entity=song&limit=12`)
+              .then(response => { if (!response.ok) throw new Error("A busca online não respondeu."); return response.json(); })
+              .then(payload => {
+                const results = (payload.results ?? []).map((item: any) => ({
+                  guid: String(item.trackId), title: item.trackName, artist: item.artistName,
+                  album: item.collectionName, url: item.trackViewUrl, artwork: item.artworkUrl100,
+                  online: true
+                }));
+                setSongs(results); setSongSearchStatus(results.length ? "Resultados encontrados na busca online. Abra a loja para ouvir ou conferir." : "Não encontramos esse louvor no catálogo online. Tente título ou artista.");
+              })
+              .catch(error => setSongSearchStatus(error instanceof Error ? error.message : "Falha ao pesquisar na internet."))
+              .finally(() => setSearchingSongs(false));
+          } else { setSearchingSongs(false); }
+        }
+      }
       if (m.type === "library-found") { setLibraryAssets(m.assets ?? []); setLoadingLibrary(false); }
       if (m.type === "song-sections") setSongSections(v => ({ ...v, [m.guid]: m.sections ?? [] }));
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
@@ -163,13 +187,19 @@ export function App() {
       </section>
       <section className="card">
         <small>BIBLIOTECA DO SPRESENTER</small><h2>Louvores cadastrados</h2>
-        <label>Buscar música<input value={songQuery} onChange={e => setSongQuery(e.target.value)} placeholder="Digite o nome do louvor..." onKeyDown={e => { if (e.key === "Enter" && songQuery.trim()) { setSearchingSongs(true); postMessage({ type: "search-songs", query: songQuery.trim() }); } }} /></label>
-        <button className="primary" disabled={!songQuery.trim() || searchingSongs} onClick={() => { setSearchingSongs(true); postMessage({ type: "search-songs", query: songQuery.trim() }); }}>{searchingSongs ? "Buscando..." : "Buscar louvores"}</button>
-        {songs.map(song => <div className="verse" key={song.guid}><div className="verse-head"><div><strong>{song.title || song.name}</strong><small>{song.artist || song.author || "Louvor cadastrado"}</small></div><button className="go" onClick={() => postMessage({ type: "get-song-sections", guid: song.guid })}>Ver partes</button></div>
+        <label>Buscar música<input value={songQuery} onChange={e => setSongQuery(e.target.value)} placeholder="Digite o nome do louvor..." onKeyDown={e => { if (e.key === "Enter" && songQuery.trim()) { setSearchingSongs(true); setSongSearchStatus("Consultando a biblioteca do SPresenter…"); setSongSearchSource(""); postMessage({ type: "search-songs", query: songQuery.trim() }); } }} /></label>
+        <button className="primary" disabled={!songQuery.trim() || searchingSongs} onClick={() => { setSearchingSongs(true); setSongSearchStatus("Consultando a biblioteca do SPresenter…"); setSongSearchSource(""); postMessage({ type: "search-songs", query: songQuery.trim() }); }}>{searchingSongs ? "Buscando..." : "Buscar louvores"}</button>
+        {songSearchStatus && <p className="hint">{searchingSongs ? "⏳ " : ""}{songSearchStatus}</p>}
+        {songs.map(song => song.online ? <div className="verse" key={song.guid}>
+          <div className="verse-head"><div><strong>{song.title}</strong><small>{song.artist}{song.album ? " • " + song.album : ""}</small></div><span className="hint">Internet</span></div>
+          <p className="hint">Encontrado fora da biblioteca local. Para usar no telão, importe o louvor e sua letra/licença para o SPresenter.</p>
+          {song.url && <a href={song.url} target="_blank" rel="noreferrer">Abrir na Apple Music / iTunes</a>}
+        </div> : <div className="verse" key={song.guid}><div className="verse-head"><div><strong>{song.title || song.name}</strong><small>{song.artist || song.author || "Louvor cadastrado"}</small></div><button className="go" onClick={() => postMessage({ type: "get-song-sections", guid: song.guid })}>Ver partes</button></div>
           {(songSections[song.guid] || []).map((section: any, index: number) => <button className="ghost" key={index} style={{margin:"5px 5px 0 0"}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>{section.type || "Parte"} {index + 1} — Apresentar</button>)}
           <button className="primary" style={{marginTop:8}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index: 0, output, contentLayer })}>▶ Apresentar louvor</button>
         </div>)}
-        {!songs.length && <p className="hint">Pesquise para listar as músicas encontradas na biblioteca do SPresenter.</p>}
+        {!songs.length && !searchingSongs && !songSearchStatus && <p className="hint">Pesquise para localizar primeiro na biblioteca do SPresenter e, se não houver resultado, na internet.</p>}
+        <p className="hint">A busca online mostra título, artista e álbum, com link para a loja. Letras protegidas por direitos autorais não são copiadas automaticamente; louvores cadastrados localmente continuam com prévia e envio direto.</p>
       </section>
       <section className="card">
         <small>COMUNICAÇÃO COM A IGREJA</small><h2>Mensagem informativa</h2>
