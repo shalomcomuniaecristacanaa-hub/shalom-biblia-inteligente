@@ -72,9 +72,9 @@ export function App() {
     const timer = window.setTimeout(async () => {
       setBibleStatus("Buscando texto bíblico…");
       try {
-        const match = reference.match(/^(.+?)\\s+(\\d{1,3})(?:\\s*:\\s*(\\d{1,3})(?:\\s*[-–]\\s*(\\d{1,3}))?)?$/);
+        const match = reference.match(/^(.+?)\s+(\d{1,3})(?:\s*:\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?$/);
         if (!match) throw new Error("Use Livro capítulo:versículo, por exemplo João 3:16 ou João 3:16-17.");
-        const normalize = (value: string) => value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]/g, "");
+        const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]/g, "");
         const books: Array<[string,string,string[]]> = [
           ["Gênesis","gn",["genesis","gen"]],["Êxodo","ex",["exodo","exodus"]],["Levítico","lv",["levitico","lev"]],["Números","nm",["numeros","num"]],["Deuteronômio","dt",["deuteronomio","deut"]],["Josué","js",["josue"]],["Juízes","jz",["juizes"]],["Rute","rt",["rute"]],["1 Samuel","1sm",["1samuel","i samuel"]],["2 Samuel","2sm",["2samuel","ii samuel"]],["1 Reis","1rs",["1reis","i reis"]],["2 Reis","2rs",["2reis","ii reis"]],["1 Crônicas","1cr",["1cronicas","i cronicas"]],["2 Crônicas","2cr",["2cronicas","ii cronicas"]],["Esdras","ed",["esdras"]],["Neemias","ne",["neemias"]],["Ester","et",["ester"]],["Jó","job",["jo","job"]],["Salmos","sl",["salmo","salmos"]],["Provérbios","pv",["proverbios"]],["Eclesiastes","ec",["eclesiastes"]],["Cânticos","ct",["canticos","cantares"]],["Isaías","is",["isaias"]],["Jeremias","jr",["jeremias"]],["Lamentações","lm",["lamentacoes"]],["Ezequiel","ez",["ezequiel"]],["Daniel","dn",["daniel"]],["Oséias","os",["oseias"]],["Joel","jl",["joel"]],["Amós","am",["amos"]],["Obadias","ob",["obadias"]],["Jonas","jn",["jonas"]],["Miquéias","mq",["miqueias"]],["Naum","na",["naum"]],["Habacuque","hc",["habacuque"]],["Sofonias","sf",["sofonias"]],["Ageu","ag",["ageu"]],["Zacarias","zc",["zacarias"]],["Malaquias","ml",["malaquias"]],["Mateus","mt",["mateus"]],["Marcos","mc",["marcos"]],["Lucas","lc",["lucas"]],["João","jo",["joao"]],["Atos","at",["atos"]],["Romanos","rm",["romanos"]],["1 Coríntios","1co",["1corintios","i corintios"]],["2 Coríntios","2co",["2corintios","ii corintios"]],["Gálatas","gl",["galatas"]],["Efésios","ef",["efesios"]],["Filipenses","fp",["filipenses"]],["Colossenses","cl",["colossenses"]],["1 Tessalonicenses","1ts",["1tessalonicenses","i tessalonicenses"]],["2 Tessalonicenses","2ts",["2tessalonicenses","ii tessalonicenses"]],["1 Timóteo","1tm",["1timoteo","i timoteo"]],["2 Timóteo","2tm",["2timoteo","ii timoteo"]],["Tito","tt",["tito"]],["Filemom","fm",["filemom"]],["Hebreus","hb",["hebreus"]],["Tiago","tg",["tiago"]],["1 Pedro","1pe",["1pedro","i pedro"]],["2 Pedro","2pe",["2pedro","ii pedro"]],["1 João","1jo",["1joao","i joao"]],["2 João","2jo",["2joao","ii joao"]],["3 João","3jo",["3joao","iii joao"]],["Judas","jd",["judas"]],["Apocalipse","ap",["apocalipse"]]
         ];
@@ -88,7 +88,7 @@ export function App() {
         const rows = Array.isArray(payload) ? payload : (payload.verses || payload.data?.verses || []);
         const selected = rows.filter((item: any) => Number(item.number) >= first && Number(item.number) <= last);
         if (!selected.length || selected.length !== last-first+1) throw new Error("Não encontrei todos os versículos. Confira capítulo e numeração.");
-        const text = selected.map((item: any) => `${item.number}. ${String(item.text || "").replace(/<[^>]*>/g," ").trim()}`).join("\\n");
+        const text = selected.map((item: any) => `${item.number}. ${String(item.text || "").replace(/<[^>]*>/g," ").trim()}`).join("\n");
         if (!cancelled) { setBibleResult({reference:`${book[0]} ${chapter}:${first}${last>first?"-"+last:""}`,book:book[0],text}); setBibleStatus(""); }
       } catch (error) {
         if (!cancelled) { setBibleResult(null); setBibleStatus(error instanceof Error ? error.message : "Não foi possível consultar a Bíblia."); }
