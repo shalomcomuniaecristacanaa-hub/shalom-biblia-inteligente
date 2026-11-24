@@ -75,7 +75,7 @@ export function App() {
           setSongs(localSongs); setSongSearchSource("local"); setSongSearchStatus("Encontrado na biblioteca local do SPresenter."); setSearchingSongs(false);
         } else {
           setSongs([]); setSongSearchSource("online"); setSongSearchStatus("Não encontrado localmente. Procurando no catálogo online…");
-          const term = songQuery.trim();
+          const term = String(m.query ?? "").trim();
           if (term) {
             window.fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=br&media=music&entity=song&limit=12`)
               .then(response => { if (!response.ok) throw new Error("A busca online não respondeu."); return response.json(); })
