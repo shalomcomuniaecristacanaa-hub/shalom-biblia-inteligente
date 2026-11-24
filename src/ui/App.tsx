@@ -4,6 +4,8 @@ import { onMessage, postMessage } from "@spresenter/plugin-sdk/ui";
 type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
+type ConnectionSettings = { grandmaIp: string; vmixIp: string };
+const blankConnections = (): ConnectionSettings => ({ grandmaIp: "", vmixIp: "" });
 type EventSchedule = { id: string; name: string; date: string; time: string; coverGuid: string; song: string; grandmaCommand: string; vmixFunction: string; startStream: boolean; enabled: boolean };
 const blankSchedule = (): EventSchedule => ({ id: "", name: "", date: "", time: "", coverGuid: "", song: "", grandmaCommand: "", vmixFunction: "", startStream: false, enabled: true });
 const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "", book: "" });
@@ -64,12 +66,13 @@ export function App() {
   const [scheduleDraft, setScheduleDraft] = useState<EventSchedule>(blankSchedule());
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
+  const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
 
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
       if (m.type === "state") {
-        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
         const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
         const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
@@ -446,6 +449,18 @@ export function App() {
         {groupBackgrounds[category] && <div className="importbox"><strong>Imagem padrão selecionada</strong><img src={groupBackgrounds[category]} alt={"Fundo padrão " + category} style={{display:"block",width:"100%",maxHeight:150,objectFit:"contain",marginTop:8,borderRadius:8}}/><button className="ghost" style={{marginTop:8}} onClick={() => setGroupBackgrounds(v => ({ ...v, [category]: "" }))}>Remover imagem</button></div>}
       </label>)}
       <button className="primary" onClick={() => postMessage({ type: "save-group-backgrounds", groupBackgrounds })}>Salvar imagens padrão</button>
+    </section>
+    <section className="card">
+      <small>REDE E EQUIPAMENTOS</small><h2>Endereços dos equipamentos</h2>
+      <p className="hint">Cadastre os IPs atuais. Como a rede usa DHCP, se algum endereço mudar, atualize aqui e salve novamente. O endereço 10.0.0.2 da interface Art-Net não deve ser colocado como IP da mesa, a menos que seja realmente o IP de controle da GrandMA2.</p>
+      <label>IP da mesa GrandMA2 / computador grandMA2 onPC
+        <input value={connectionSettings.grandmaIp} onChange={e => setConnectionSettings(v => ({...v, grandmaIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.50" inputMode="decimal" />
+      </label>
+      <label>IP do computador que executa o vMix
+        <input value={connectionSettings.vmixIp} onChange={e => setConnectionSettings(v => ({...v, vmixIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.60" inputMode="decimal" />
+      </label>
+      <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
+      <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
     <section className="card">
       <small>INTEGRAÇÃO SPRESENTER</small><h2>Camadas e saída</h2>
