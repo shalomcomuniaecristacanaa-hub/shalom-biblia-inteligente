@@ -229,7 +229,7 @@ export function App() {
     <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
     <nav>
       <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>◷ Painel principal</button>
-      <button className={tab === "scheduler" ? "active" : ""} onClick={() => { setTab("scheduler"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); }}>＋ Cadastro de eventos</button>
+      <button className={tab === "scheduler" ? "active" : ""} onClick={() => { setTab("scheduler"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); if (!libraryAssets.length) { setLoadingLibrary(true); postMessage({type:"list-library",assetType:"all"}); } }}>＋ Cadastro de eventos</button>
       <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>● Culto ao Vivo</button>
       <button className={tab === "library" ? "active" : ""} onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({ type: "list-library", assetType: libraryType }); }}>▤ Biblioteca SPresenter</button>
       <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
@@ -240,7 +240,7 @@ export function App() {
 
     {tab === "dashboard" && <section className="dashboard-shell">
       <div className="dashboard-heading"><div><small>SHALOM · CENTRAL DE AUTOMAÇÃO</small><h1>Painel de eventos</h1><p>Horários programados e ações previstas para a igreja.</p></div><div className="clock-card"><span>HORÁRIO LOCAL</span><strong>{new Date(clockNow).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong><small>{new Date(clockNow).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</small></div></div>
-      <div className="dashboard-toolbar"><div><strong>{eventSchedules.filter(e => e.enabled).length}</strong><span> eventos ativos</span></div><button className="primary" onClick={() => { setScheduleDraft(blankSchedule()); setEditingSchedule(false); setTab("scheduler"); }}>＋ Cadastrar evento</button></div>
+      <div className="dashboard-toolbar"><div><strong>{eventSchedules.filter(e => e.enabled).length}</strong><span> eventos ativos</span></div><button className="primary" onClick={() => { setScheduleDraft(blankSchedule()); setEditingSchedule(false); setTab("scheduler"); if (!libraryAssets.length) { setLoadingLibrary(true); postMessage({type:"list-library",assetType:"all"}); } }}>＋ Cadastrar evento</button></div>
       {eventSchedules.filter(e => e.enabled).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)).filter(e => new Date(e.date+"T"+e.time).getTime() >= clockNow - 60000).length === 0
         ? <div className="dashboard-empty"><div>◷</div><h2>Nenhum evento programado</h2><p>Quando você cadastrar um evento, o horário e todas as ações aparecerão aqui.</p><button className="primary" onClick={() => setTab("scheduler")}>Criar primeira programação</button></div>
         : <div className="event-list">{eventSchedules.filter(e => e.enabled).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time)).filter(e => new Date(e.date+"T"+e.time).getTime() >= clockNow - 60000).map(event => {
