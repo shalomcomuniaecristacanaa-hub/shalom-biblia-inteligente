@@ -45,10 +45,11 @@ export function App() {
         if (content) { setContentLayer(String(content.index)); setCaptureLayer(String(content.index)); }
         if (bg) setBackgroundLayer(String(bg.index));
         if ((m.outputs ?? []).length) setOutput(String(m.outputs[0].index));
+        postMessage({ type: "watch-bible", output: String((m.outputs ?? [])[0]?.index ?? 0), captureLayer: content?.index ?? 0 });
       }
       if (m.type === "captured") {
         setVerse(v => ({ ...v, reference: m.reference || "", book: m.book || "", text: m.text || "" }));
-        setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
+        setTab("add"); setNotice("Versículo da Bíblia do SPresenter atualizado automaticamente na prévia.");
       }
       if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
       if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }
@@ -172,7 +173,7 @@ export function App() {
     </>}
     {tab === "add" && <section className="card">
       <div className="section-title"><div><small>BIBLIOTECA PESSOAL</small><h2>{editing ? "Editar favorito" : "Adicionar versículo"}</h2></div></div>
-      <div className="importbox"><strong>Importar da Bíblia do SPresenter</strong><p>Abra a Bíblia nativa, coloque o versículo desejado na camada Conteúdo e importe o que estiver ao vivo.</p><div className="actions"><button className="ghost" onClick={() => postMessage({ type: "open-bible" })}>Abrir Bíblia do SPresenter</button><button className="primary" onClick={() => postMessage({ type: "capture-live", output, captureLayer })}>Importar do Conteúdo</button></div></div>
+      <div className="importbox"><strong>Sincronização automática com a Bíblia</strong><p>Deixe a Bíblia do SPresenter aberta e selecione o versículo para colocá-lo na camada Conteúdo. O Shalom acompanha essa camada e atualiza a prévia sozinho — não precisa importar nem digitar.</p><div className="actions"><button className="ghost" onClick={() => postMessage({ type: "open-bible" })}>Abrir Bíblia do SPresenter</button></div></div>
       {verse.text.trim() && <div className="preview-card">
         <div className="preview-heading"><div><small>PRÉVIA DO TELÃO</small><strong>Confira antes de enviar</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
         <div className="verse-screen-preview">
