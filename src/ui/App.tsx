@@ -128,7 +128,7 @@ export function App() {
       <section className="card livebar">
         <small>SAÍDA E CAMADA DE CONTEÚDO</small>
         <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
-        <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>\n      <label>Camada Conteúdo do Culto ao Vivo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
+        <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
       </section>
     </>}
     {tab === "library" && <section className="card">
