@@ -77,18 +77,33 @@ export function App() {
           setSongs([]); setSongSearchSource("online"); setSongSearchStatus("Não encontrado localmente. Procurando no catálogo online…");
           const term = String(m.query ?? "").trim();
           if (term) {
-            window.fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=br&media=music&entity=song&limit=12`)
-              .then(response => { if (!response.ok) throw new Error("A busca online não respondeu."); return response.json(); })
-              .then(payload => {
-                const results = (payload.results ?? []).map((item: any) => ({
-                  guid: String(item.trackId), title: item.trackName, artist: item.artistName,
-                  album: item.collectionName, url: item.trackViewUrl, artwork: item.artworkUrl100,
-                  online: true
-                }));
-                setSongs(results); setSongSearchStatus(results.length ? "Resultados encontrados na busca online. Abra a loja para ouvir ou conferir." : "Não encontramos esse louvor no catálogo online. Tente título ou artista.");
-              })
-              .catch(error => setSongSearchStatus(error instanceof Error ? error.message : "Falha ao pesquisar na internet."))
-              .finally(() => setSearchingSongs(false));
+            const callbackName = "__shalomMusicSearch_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+            const script = document.createElement("script");
+            let timeout: number;
+            const cleanup = () => {
+              window.clearTimeout(timeout);
+              script.remove();
+              delete (window as any)[callbackName];
+            };
+            (window as any)[callbackName] = (payload: any) => {
+              cleanup();
+              const results = (payload.results ?? []).map((item: any) => ({
+                guid: String(item.trackId), title: item.trackName, artist: item.artistName,
+                album: item.collectionName, url: item.trackViewUrl, artwork: item.artworkUrl100,
+                online: true
+              }));
+              setSongs(results);
+              setSongSearchStatus(results.length ? "Resultados encontrados no catálogo online. Abra a loja para ouvir ou conferir." : "Não encontramos esse louvor no catálogo online. Tente título ou artista.");
+              setSearchingSongs(false);
+            };
+            script.onerror = () => {
+              cleanup(); setSongSearchStatus("Não foi possível acessar a busca online. Verifique a conexão e as permissões de rede do SPresenter."); setSearchingSongs(false);
+            };
+            script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=br&media=music&entity=song&limit=12&callback=${callbackName}`;
+            timeout = window.setTimeout(() => {
+              cleanup(); setSongSearchStatus("A busca online demorou demais. Tente novamente."); setSearchingSongs(false);
+            }, 12000);
+            document.head.appendChild(script);
           } else { setSearchingSongs(false); }
         }
       }
