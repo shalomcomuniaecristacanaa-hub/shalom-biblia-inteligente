@@ -189,21 +189,33 @@ async function listLibrary(msg: UiMessage) {
   const assets = await spresenter.assets.list(requested === "all" ? undefined : { type: requested });
   const allAssets: any[] = [...(assets ?? [])];
 
-  // A biblioteca Worshipwide também pode aparecer no setlist ativo. O SDK
-  // documenta o identificador worshipwide/<arquivo>, mas não expõe um método
-  // próprio para enumerar todo o catálogo remoto; por isso reunimos os itens
-  // Worshipwide já adicionados ao setlist sem inventar uma listagem completa.
+  // Inclui os itens visuais que já estão no setlist ativo. Dependendo da
+  // versão/estrutura do setlist, os itens podem vir em schedules, assets,
+  // items ou agrupados em subobjetos. Não inventa itens do catálogo remoto.
   try {
     const active = await spresenter.setlists.getActive();
-    const setlist = (active as any)?.setlist ?? active;
-    const scheduled = (setlist?.schedules ?? []).flatMap((group: any) => group?.assets ?? []);
-    const loose = setlist?.assets ?? [];
-    for (const item of [...scheduled, ...loose]) {
-      if (item?.guid && !allAssets.some((existing: any) => existing.guid === item.guid)) {
+    const root = (active as any)?.setlist ?? active;
+    const seen = new Set<string>();
+    const collect = (value: any, depth = 0): any[] => {
+      if (!value || depth > 8) return [];
+      if (Array.isArray(value)) return value.flatMap(item => collect(item, depth + 1));
+      if (typeof value !== "object") return [];
+      const guid = String(value.guid ?? value.assetGuid ?? "");
+      const own = guid ? [{ ...value, guid }] : [];
+      return [...own, ...Object.entries(value)
+        .filter(([key]) => ["schedules", "assets", "items", "groups", "children", "entries"].includes(key))
+        .flatMap(([, child]) => collect(child, depth + 1))];
+    };
+    for (const item of collect(root)) {
+      const guid = String(item.guid ?? "");
+      if (guid && !seen.has(guid) && !allAssets.some((existing: any) => existing.guid === guid)) {
+        seen.add(guid);
         allAssets.push(item);
       }
     }
-  } catch { /* setlist ausente ou indisponível: mantém a biblioteca local */ }
+  } catch (error) {
+    console.warn(PLUGIN_TAG, "Não foi possível ler os itens do setlist ativo:", error);
+  }
 
   const isVisual = (asset: any) => {
     const type = String(asset?.type ?? "").toLowerCase();
@@ -237,29 +249,61 @@ async function presentLibraryBackground(msg: UiMessage) {
   const output = String(msg.output ?? "0");
   const layer = Number(msg.backgroundLayer);
   if (!guid || !Number.isInteger(layer)) throw new Error("Selecione uma mídia local e a camada Fundo.");
+
   const isWorshipwide = guid.startsWith("worshipwide/");
   const asset = isWorshipwide ? null : await spresenter.assets.get(guid);
   if (!asset && !isWorshipwide) throw new Error("Não encontrei essa mídia na biblioteca do SPresenter.");
+
   const originalType = String((asset as any)?.type ?? (isWorshipwide ? "backgroundVideo" : ""));
-  if (!isWorshipwide && !["image", "video", "backgroundVideo", "motion", "motionBackground", "animatedBackground"].includes(originalType.toLowerCase())) {
-    throw new Error("Selecione uma imagem, vídeo ou fundo animado da biblioteca.");
+  const normalizedType = originalType.toLowerCase();
+  const isImage = normalizedType === "image";
+  const isVideo = ["video", "backgroundvideo"].includes(normalizedType) || isWorshipwide;
+  if (!isWorshipwide && !isImage && !isVideo) {
+    throw new Error("Esse tipo de mídia não pode ser usado como fundo. Escolha uma imagem ou vídeo.");
   }
-  const type = isWorshipwide || originalType.toLowerCase() === "video" ? "backgroundVideo" : originalType;
-  const data = (asset as any)?.data ?? {};
-  const presentation = (asset as any)?.presentation ?? {
-    title: (asset as any)?.title ?? (asset as any)?.name ?? (isWorshipwide ? "Fundo Worshipwide" : "Fundo local"),
-    asset: { guid, type },
-    theme: (asset as any)?.theme ?? data.theme ?? data.presentation?.theme,
-    props: data.props ?? {}
-  };
-  if (type === "image" && !presentation.theme) {
-    throw new Error("O SPresenter não forneceu o tema de exibição dessa imagem pelo SDK. Abra a mídia no painel nativo para verificar; não alterei o telão.");
+
+  const title = String((asset as any)?.title ?? (asset as any)?.name ?? (isWorshipwide ? "Fundo Worshipwide" : "Mídia local"));
+
+  // O endpoint interno de apresentação do SPresenter resolve temas e fundos
+  // por saída, mas não existe método live.present no SDK público. Para imagens,
+  // usamos o renderer de miniaturas do próprio SPresenter em resolução de saída
+  // e o elemento HTML já suportado pelo plugin; assim não enviamos uma
+  // apresentação image sem theme (que o renderer nativo deixa vazia).
+  if (isImage) {
+    const outputs = await spresenter.outputs.list();
+    const outputInfo = outputs.find((item: any) => String(item.index) === output);
+    const width = Math.max(1280, Number((outputInfo as any)?.width ?? 1920));
+    const height = Math.max(720, Number((outputInfo as any)?.height ?? 1080));
+    let imageSource = String(msg.thumbnail ?? (asset as any)?.thumbnailUrl ?? (asset as any)?.thumbnail ?? "");
+    if (!imageSource) {
+      try {
+        imageSource = await spresenter.thumbnails.render({
+          title,
+          asset: { guid, type: "image" }
+        }, width, height) ?? "";
+      } catch (error) {
+        console.warn(PLUGIN_TAG, "Falha ao gerar imagem para projeção:", error);
+      }
+    }
+    if (!imageSource) {
+      throw new Error("O SPresenter não forneceu uma imagem renderizada para projeção. A mídia aparece na biblioteca, mas não foi possível obter sua imagem em resolução de saída.");
+    }
+    await ensureStage(output, layer, "background");
+    spresenter.live.element(output, layer, "shalom-background").setHtml(backgroundHtml(imageSource, "Fundo local"));
+    await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+  } else {
+    const presentation = {
+      title,
+      asset: { guid, type: "backgroundVideo" },
+      props: {}
+    };
+    await spresenter.live.apply(output, layer, presentation);
+    await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
   }
-  await spresenter.live.apply(output, layer, presentation);
-  await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+
   spresenter.ui.postMessage({
-    type: "background-presented", guid, title: (asset as any)?.title ?? (asset as any)?.name ?? (isWorshipwide ? "Fundo Worshipwide" : "Mídia local"),
-    message: "Fundo local enviado à camada Fundo."
+    type: "background-presented", guid, title,
+    message: "Fundo enviado à camada Fundo."
   });
 }
 
