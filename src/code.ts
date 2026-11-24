@@ -199,10 +199,15 @@ async function listLibrary(msg: UiMessage) {
 async function searchSongs(msg: UiMessage) {
   const query = String(msg.query ?? "").trim();
   if (!query) throw new Error("Digite o nome de um louvor.");
-  const songs = await spresenter.assets.search(query, { type: "music" });
-  spresenter.ui.postMessage({ type: "songs-found", songs: (songs ?? []).map((song: any) => ({
-    guid: song.guid, title: song.title, name: song.name, artist: song.artist, author: song.author
-  })) });
+  try {
+    const songs = await spresenter.assets.search(query, { type: "music" });
+    spresenter.ui.postMessage({ type: "songs-found", songs: (songs ?? []).map((song: any) => ({
+      guid: song.guid, title: song.title, name: song.name, artist: song.artist, author: song.author
+    })) });
+  } catch (error) {
+    // Uma falha na pesquisa local também permite que a interface tente a busca online.
+    spresenter.ui.postMessage({ type: "songs-found", songs: [], localError: error instanceof Error ? error.message : String(error) });
+  }
 }
 async function getSongSections(msg: UiMessage) {
   const guid = String(msg.guid ?? "");
