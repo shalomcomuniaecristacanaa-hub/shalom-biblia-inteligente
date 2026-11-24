@@ -24,7 +24,10 @@ export function App() {
   const [songs, setSongs] = useState<any[]>([]);
   const [songSections, setSongSections] = useState<Record<string, any[]>>({});
   const [messageText, setMessageText] = useState("");
-  const [searchingSongs, setSearchingSongs] = useState(false);\n  const [libraryAssets, setLibraryAssets] = useState<any[]>([]);\n  const [libraryType, setLibraryType] = useState("all");\n  const [libraryQuery, setLibraryQuery] = useState("");\n  const [loadingLibrary, setLoadingLibrary] = useState(false);
+  const [searchingSongs, setSearchingSongs] = useState(false);
+  const [libraryAssets, setLibraryAssets] = useState<any[]>([]);
+  const [libraryType, setLibraryType] = useState("all");
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
@@ -85,6 +88,8 @@ export function App() {
     <header><div className="brand">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className="online" /></header>
     <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
     <nav>
+      <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>● Culto ao Vivo</button>
+      <button className={tab === "library" ? "active" : ""} onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({ type: "list-library", assetType: libraryType }); }}>▤ Biblioteca SPresenter</button>
       <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
       <button className={tab === "add" ? "active" : ""} onClick={() => { setTab("add"); if (!verse.id) setVerse(blank()); }}>＋ Adicionar</button>
       <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configurações</button>
