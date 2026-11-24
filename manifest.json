@@ -12,7 +12,7 @@
     "outputs:read",
     "live:read",
     "live:write",
-    "assets:write",
+    "assets:write",\n    "assets:read",
     "net:connect",
     "ui:write"
   ],
