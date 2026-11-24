@@ -18,11 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
       - name: Install dependencies
@@ -55,7 +55,7 @@ jobs:
           echo "Could not publish compiled files after 3 fresh builds."
           exit 1
       - name: Upload installable ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: shalom-biblia-inteligente-installer
           path: release/*.zip
