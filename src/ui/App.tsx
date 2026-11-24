@@ -20,6 +20,8 @@ export function App() {
   const [captureLayer, setCaptureLayer] = useState("0");
   const [tab, setTab] = useState<"live" | "library" | "favorites" | "add" | "settings">("live");
   const [bibleReference, setBibleReference] = useState("");
+  const [bibleResult, setBibleResult] = useState<any | null>(null);
+  const [bibleStatus, setBibleStatus] = useState("");
   const [songQuery, setSongQuery] = useState("");
   const [songs, setSongs] = useState<any[]>([]);
   const [songSections, setSongSections] = useState<Record<string, any[]>>({});
@@ -47,6 +49,8 @@ export function App() {
         if ((m.outputs ?? []).length) setOutput(String(m.outputs[0].index));
         postMessage({ type: "watch-bible", output: String((m.outputs ?? [])[0]?.index ?? 0), captureLayer: content?.index ?? 0 });
       }
+      if (m.type === "bible-found") { setBibleResult(m.result ?? null); setBibleStatus(""); }
+      if (m.type === "bible-error") { setBibleResult(null); setBibleStatus(m.message || "Não foi possível localizar essa referência."); }
       if (m.type === "captured") {
         setVerse(v => ({ ...v, reference: m.reference || "", book: m.book || "", text: m.text || "" }));
         setTab("add"); setNotice("Versículo da Bíblia do SPresenter atualizado automaticamente na prévia.");
@@ -62,6 +66,16 @@ export function App() {
     postMessage({ type: "init" });
     return off;
   }, []);
+
+  useEffect(() => {
+    const reference = bibleReference.trim();
+    if (!reference) { setBibleResult(null); setBibleStatus(""); return; }
+    setBibleStatus("Buscando texto bíblico…");
+    const timer = window.setTimeout(() => {
+      postMessage({ type: "lookup-bible", reference, version: "nvi" });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [bibleReference]);
 
   const groups = useMemo(() => ["Todas", ...Array.from(new Set(verses.map(v => v.group || "Geral")))], [verses]);
   const filtered = useMemo(() => verses.filter(v =>
@@ -100,10 +114,16 @@ export function App() {
     {tab === "live" && <>
       <section className="card">
         <small>CONTROLE DURANTE O CULTO</small><h2>Bíblia</h2>
-        <p className="hint">Informe a referência para localizar rapidamente o texto no painel bíblico nativo do SPresenter.</p>
-        <label>Livro, capítulo e versículo<input value={bibleReference} onChange={e => setBibleReference(e.target.value)} placeholder="Ex.: João 3:16 ou Salmos 23:1-6" /></label>
-        <button className="primary" onClick={() => postMessage({ type: "open-bible", reference: bibleReference })}>Abrir Bíblia do SPresenter</button>
-        <p className="hint">A API pública do SPresenter não oferece busca programática na base bíblica; a seleção e a projeção do versículo continuam no painel Bíblia nativo.</p>
+        <p className="hint">Digite a referência. O texto aparece automaticamente aqui embaixo, sem abrir outro painel e sem importar conteúdo.</p>
+        <label>Livro, capítulo e versículo<input value={bibleReference} onChange={e => setBibleReference(e.target.value)} placeholder="Ex.: João 3:16 ou Salmos 23:1-2" /></label>
+        {bibleStatus && <p className="hint">{bibleStatus}</p>}
+        {bibleResult && <div className="preview-card" style={{marginTop:14}}>
+          <div className="preview-heading"><div><small>PRÉVIA DO TEXTO BÍBLICO · NVI</small><strong>{bibleResult.reference}</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
+          <div className="screen-verse-text" style={{padding:"18px 12px",fontSize:20,lineHeight:1.55}}>{bibleResult.text}</div>
+          <button className="primary wide" disabled={busy} onClick={() => present({id:"",reference:bibleResult.reference,text:bibleResult.text,book:bibleResult.book || "",group:"Geral",background:"",theme:""})}>{busy ? "Enviando..." : "▶ Enviar para os telões"}</button>
+        </div>}
+        {!bibleStatus && !bibleResult && bibleReference.trim() && <p className="hint">Digite uma referência completa, como João 3:16 ou João 3:16-17.</p>}
+        <p className="hint">A busca usa a Bíblia em português NVI. Pesquisar e visualizar nunca altera o conteúdo que está ao vivo.</p>
       </section>
       <section className="card">
         <small>BIBLIOTECA DO SPRESENTER</small><h2>Louvores cadastrados</h2>
