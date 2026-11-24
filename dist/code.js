@@ -145,6 +145,47 @@
     const text = textCandidates[0].slice(0, 3e3);
     spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3e3) });
   }
+  async function searchSongs(msg) {
+    const query = String(msg.query ?? "").trim();
+    if (!query) throw new Error("Digite o nome de um louvor.");
+    const songs = await spresenter.assets.search(query, { type: "music" });
+    spresenter.ui.postMessage({ type: "songs-found", songs: (songs ?? []).map((song) => ({
+      guid: song.guid,
+      title: song.title,
+      name: song.name,
+      artist: song.artist,
+      author: song.author
+    })) });
+  }
+  async function getSongSections(msg) {
+    const guid = String(msg.guid ?? "");
+    if (!guid) throw new Error("Louvor inválido.");
+    const lyrics = await spresenter.assets.getLyrics(guid);
+    const sections = lyrics?.sections ?? lyrics?.verses ?? [];
+    spresenter.ui.postMessage({ type: "song-sections", guid, sections });
+  }
+  async function presentSong(msg) {
+    const output = String(msg.output ?? "0");
+    const layer = Number(msg.contentLayer);
+    const guid = String(msg.guid ?? "");
+    const index = Number(msg.index ?? 0);
+    if (!guid || !Number.isInteger(layer) || !Number.isInteger(index)) throw new Error("Selecione um louvor e uma camada Conteúdo válidos.");
+    await spresenter.live.setMusicVerse(output, layer, guid, index);
+    await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+    spresenter.ui.postMessage({ type: "presented", message: "Louvor enviado para o telão." });
+  }
+  async function presentMessage(msg) {
+    const output = String(msg.output ?? "0");
+    const layer = Number(msg.contentLayer);
+    const text = String(msg.text ?? "").trim();
+    if (!text) throw new Error("Digite uma mensagem antes de apresentar.");
+    if (!Number.isInteger(layer)) throw new Error("Selecione a camada Conteúdo.");
+    await ensureStage(output, layer, "content");
+    const html = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8vw;background:transparent;color:#fff;text-align:center;font:600 clamp(28px,4vw,64px)/1.3 Arial,sans-serif;text-shadow:0 3px 18px #000;white-space:pre-wrap;">' + safeText(text) + "</div>";
+    spresenter.live.element(output, layer, "shalom-verse").setHtml(html);
+    await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
+    spresenter.ui.postMessage({ type: "presented", message: "Mensagem informativa apresentada." });
+  }
   spresenter.ui.onmessage = async (raw) => {
     const msg = raw;
     if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
@@ -187,7 +228,15 @@
         spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolved, category));
         spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
       } else if (msg.type === "present") await present(msg);
-      else if (msg.type === "capture-live") await captureLive(msg);
+      else if (msg.type === "search-songs") await searchSongs(msg);
+      else if (msg.type === "get-song-sections") await getSongSections(msg);
+      else if (msg.type === "present-song") await presentSong(msg);
+      else if (msg.type === "present-message") await presentMessage(msg);
+      else if (msg.type === "clear-content") await spresenter.live.clear(String(msg.output ?? "0"), Number(msg.contentLayer));
+      else if (msg.type === "open-media") {
+        await spresenter.panels.select("media");
+        spresenter.ui.postMessage({ type: "notice", message: "Painel de mídia aberto. A importação de PowerPoint não está exposta no SDK do plugin." });
+      } else if (msg.type === "capture-live") await captureLive(msg);
       else if (msg.type === "open-bible") {
         await spresenter.panels.select("bible");
         spresenter.ui.postMessage({ type: "notice", message: "Bíblia do SPresenter aberta. Selecione e coloque o versículo ao vivo; depois use Importar do Conteúdo." });
