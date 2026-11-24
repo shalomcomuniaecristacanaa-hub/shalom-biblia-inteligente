@@ -38,7 +38,8 @@ async function sendState() {
   const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings] = await Promise.all([
     getVerses(), spresenter.outputs.list(), spresenter.layers.list(),
     spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY),
-    spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY)
+    spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY),
+    spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY)
   ]);
   spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" } });
 }
