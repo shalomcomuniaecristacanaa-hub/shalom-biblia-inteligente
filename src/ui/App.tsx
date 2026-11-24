@@ -48,6 +48,9 @@ export function App() {
   const [messageText, setMessageText] = useState("");
   const [searchingSongs, setSearchingSongs] = useState(false);
   const [libraryAssets, setLibraryAssets] = useState<any[]>([]);
+  const [selectedBackgroundGuid, setSelectedBackgroundGuid] = useState("");
+  const [lastSentBackgroundAsset, setLastSentBackgroundAsset] = useState<any | null>(null);
+  const [lastSentSongSection, setLastSentSongSection] = useState<{ guid: string; index: number } | null>(null);
   const [libraryType, setLibraryType] = useState("all");
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [notice, setNotice] = useState("");
@@ -73,7 +76,10 @@ export function App() {
         setVerse(v => ({ ...v, reference: m.reference || "", book: m.book || "", text: m.text || "" }));
         setTab("add"); setNotice("Versículo da Bíblia do SPresenter atualizado automaticamente na prévia.");
       }
-      if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
+      if (m.type === "presented") {
+        setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
+        if (m.guid && Number.isInteger(m.index)) setLastSentSongSection({ guid: m.guid, index: m.index });
+      }
       if (m.type === "songs-found") {
         const localSongs = m.songs ?? [];
         if (localSongs.length) {
@@ -112,7 +118,16 @@ export function App() {
           } else { setSearchingSongs(false); }
         }
       }
-      if (m.type === "library-found") { setLibraryAssets(m.assets ?? []); setLoadingLibrary(false); }
+      if (m.type === "library-found") {
+        const assets = m.assets ?? [];
+        setLibraryAssets(assets); setLoadingLibrary(false);
+        const firstVisual = assets.find((asset: any) => ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase()));
+        if (firstVisual) setSelectedBackgroundGuid((current: string) => current || firstVisual.guid);
+      }
+      if (m.type === "background-presented") {
+        setLastSentBackgroundAsset({ guid: m.guid, title: m.title });
+        setNotice(m.message || "Fundo local enviado.");
+      }
       if (m.type === "song-sections") setSongSections(v => ({ ...v, [m.guid]: m.sections ?? [] }));
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
       if (m.type === "error") setBusy(false);
@@ -177,6 +192,9 @@ export function App() {
   }
   const layerOptions = layers.map(l => <option key={l.index} value={String(l.index)}>{l.name || "Camada " + l.index} (#{l.index})</option>);
 
+  const visualAssets = libraryAssets.filter((asset: any) => ["image", "video", "backgroundVideo"].includes(String(asset.type ?? "").toLowerCase()));
+  const selectedBackgroundAsset = visualAssets.find((asset: any) => asset.guid === selectedBackgroundGuid) ?? null;
+
   return <main onClick={() => { if (contextVerse) setContextVerse(null); }}>
     <header><div className="brand">✦</div><div><strong>SHALOM</strong><span>BÍBLIA INTELIGENTE</span></div><i className="online" /></header>
     <section className="hero"><small>PAINEL DE MINISTRAÇÃO</small><h1>A Palavra,<br/><em>em acesso rápido.</em></h1><p>Monte suas listas de versículos e apresente com um clique.</p></section>
@@ -215,15 +233,50 @@ export function App() {
           <p className="hint">Encontrado fora da biblioteca local. Para usar no telão, importe o louvor e sua letra/licença para o SPresenter.</p>
           {song.url && <a href={song.url} target="_blank" rel="noreferrer">Abrir na Apple Music / iTunes</a>}
         </div> : <div className="verse" key={song.guid}><div className="verse-head"><div><strong>{song.title || song.name}</strong><small>{song.artist || song.author || "Louvor cadastrado"}</small></div><button className="go" onClick={() => postMessage({ type: "get-song-sections", guid: song.guid })}>Ver partes</button></div>
-          {(songSections[song.guid] || []).map((section: any, index: number) => <div key={index} style={{marginTop:10,padding:12,border:"1px solid var(--border, #444)",borderRadius:8}}>
-            <strong>{section.type || "Parte"} {index + 1}</strong>
-            {sectionBody(section) && <p style={{whiteSpace:"pre-wrap",margin:"8px 0"}}>{sectionBody(section)}</p>}
-            <button className="ghost" onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>▶ Enviar esta parte aos telões</button>
-          </div>)}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginTop:10}}>
+          {(songSections[song.guid] || []).map((section: any, index: number) => {
+            const wasSent = lastSentSongSection?.guid === song.guid && lastSentSongSection.index === index;
+            return <div key={index} style={{padding:12,border:wasSent ? "2px solid #22a06b" : "1px solid var(--border, #444)",borderRadius:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <strong>{section.type || "Parte"} {index + 1}</strong>
+                {wasSent && <span className="tag">✓ ENVIADO</span>}
+              </div>
+              {sectionBody(section) && <p style={{whiteSpace:"pre-wrap",margin:"8px 0"}}>{sectionBody(section)}</p>}
+              <button className={wasSent ? "primary" : "ghost"} onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>{wasSent ? "✓ Parte enviada" : "▶ Enviar esta parte aos telões"}</button>
+            </div>;
+          })}
+          </div>
           <button className="primary" style={{marginTop:8}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index: 0, output, contentLayer })}>▶ Apresentar louvor</button>
         </div>)}
         {!songs.length && !searchingSongs && !songSearchStatus && <p className="hint">Pesquise para localizar primeiro na biblioteca do SPresenter e, se não houver resultado, na internet.</p>}
         <p className="hint">A busca online mostra título, artista e álbum, com link para a loja. Letras protegidas por direitos autorais não são copiadas automaticamente; louvores cadastrados localmente continuam com prévia e envio direto.</p>
+      </section>
+      <section className="card">
+        <small>FUNDOS LOCAIS DO SPRESENTER</small><h2>Imagem ou vídeo para o louvor</h2>
+        <p className="hint">Escolha uma mídia já cadastrada na biblioteca do SPresenter. A prévia não altera o telão; somente o botão de envio muda a camada Fundo.</p>
+        <button className="ghost" disabled={loadingLibrary} onClick={() => { setLoadingLibrary(true); postMessage({ type: "list-library", assetType: "all" }); }}>{loadingLibrary ? "Carregando biblioteca..." : "Atualizar mídias locais"}</button>
+        <label>Mídia da biblioteca<select value={selectedBackgroundGuid} onChange={e => setSelectedBackgroundGuid(e.target.value)}>
+          <option value="">Selecione uma imagem ou vídeo...</option>
+          {visualAssets.map((asset: any) => <option key={asset.guid} value={asset.guid}>{asset.title || asset.name || "Mídia sem título"} · {asset.type === "backgroundVideo" || asset.type === "video" ? "Vídeo" : "Imagem"}</option>)}
+        </select></label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,marginTop:12}}>
+          <div className="importbox">
+            <strong>Prévia selecionada</strong>
+            {selectedBackgroundAsset?.thumbnail
+              ? <img src={selectedBackgroundAsset.thumbnail} alt={selectedBackgroundAsset.title || "Prévia da mídia"} style={{display:"block",width:"100%",aspectRatio:"16/9",objectFit:"cover",marginTop:8,borderRadius:8}} />
+              : <div style={{marginTop:8,aspectRatio:"16/9",display:"grid",placeItems:"center",background:"rgba(120,120,120,.12)",borderRadius:8}}>Prévia não disponível</div>}
+            <p className="hint">{selectedBackgroundAsset ? (selectedBackgroundAsset.title || selectedBackgroundAsset.name) + " · " + selectedBackgroundAsset.type : "Selecione uma mídia local."}</p>
+            <button className="primary wide" disabled={!selectedBackgroundAsset} onClick={() => postMessage({ type:"present-library-background", guid:selectedBackgroundAsset.guid, output, backgroundLayer })}>▶ Enviar fundo para os telões</button>
+          </div>
+          <div className="importbox">
+            <strong>Último fundo enviado</strong>
+            {lastSentBackgroundAsset ? <>
+              <span className="tag" style={{display:"inline-block",marginTop:8}}>● NO TELÃO</span>
+              <p>{lastSentBackgroundAsset.title}</p>
+            </> : <p className="hint">Nenhuma mídia enviada por este painel nesta sessão.</p>}
+          </div>
+        </div>
+        <p className="hint">A lista inclui imagens e vídeos locais que o SPresenter devolver pela biblioteca. O envio usa a camada Fundo escolhida abaixo e preserva a camada Conteúdo do louvor.</p>
       </section>
       <section className="card">
         <small>COMUNICAÇÃO COM A IGREJA</small><h2>Mensagem informativa</h2>
