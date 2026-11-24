@@ -266,7 +266,7 @@ async function presentSong(msg: UiMessage) {
   if (!guid || !Number.isInteger(layer) || !Number.isInteger(index)) throw new Error("Selecione um louvor e uma camada Conteúdo válidos.");
   await spresenter.live.setMusicVerse(output, layer, guid, index);
   await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
-  spresenter.ui.postMessage({ type: "presented", message: "Louvor enviado para o telão." });
+  spresenter.ui.postMessage({ type: "presented", guid, index, message: "Parte do louvor enviada para o telão." });
 }
 async function presentMessage(msg: UiMessage) {
   const output = String(msg.output ?? "0");
