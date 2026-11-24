@@ -18,13 +18,13 @@ export function App() {
   const [contentLayer, setContentLayer] = useState("0");
   const [backgroundLayer, setBackgroundLayer] = useState("1");
   const [captureLayer, setCaptureLayer] = useState("0");
-  const [tab, setTab] = useState<"live" | "favorites" | "add" | "settings">("live");
+  const [tab, setTab] = useState<"live" | "library" | "favorites" | "add" | "settings">("live");
   const [bibleReference, setBibleReference] = useState("");
   const [songQuery, setSongQuery] = useState("");
   const [songs, setSongs] = useState<any[]>([]);
   const [songSections, setSongSections] = useState<Record<string, any[]>>({});
   const [messageText, setMessageText] = useState("");
-  const [searchingSongs, setSearchingSongs] = useState(false);
+  const [searchingSongs, setSearchingSongs] = useState(false);\n  const [libraryAssets, setLibraryAssets] = useState<any[]>([]);\n  const [libraryType, setLibraryType] = useState("all");\n  const [libraryQuery, setLibraryQuery] = useState("");\n  const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function App() {
         setTab("add"); setNotice("Conteúdo importado da camada selecionada. Confira a referência e o texto antes de salvar.");
       }
       if (m.type === "presented") setNotice(m.background === "error" ? "Versículo apresentado. " + m.message : "Apresentado: " + (m.reference || m.message || "Conteúdo enviado"));
-      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }
+      if (m.type === "songs-found") { setSongs(m.songs ?? []); setSearchingSongs(false); }\n      if (m.type === "library-found") { setLibraryAssets(m.assets ?? []); setLoadingLibrary(false); }
       if (m.type === "song-sections") setSongSections(v => ({ ...v, [m.guid]: m.sections ?? [] }));
       if (m.type === "notice" || m.type === "error") setNotice(m.message);
       if (m.type === "error") setBusy(false);
@@ -87,7 +87,7 @@ export function App() {
     <nav>
       <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
       <button className={tab === "add" ? "active" : ""} onClick={() => { setTab("add"); if (!verse.id) setVerse(blank()); }}>＋ Adicionar</button>
-      <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configuração</button>
+      <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>⚙ Configurações</button>
     </nav>
     {notice && <div className="notice" onClick={() => setNotice("")}>{notice}<button>×</button></div>}
     {tab === "live" && <>
@@ -123,10 +123,10 @@ export function App() {
       <section className="card livebar">
         <small>SAÍDA E CAMADA DE CONTEÚDO</small>
         <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
-        <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
+        <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>\n      <label>Camada Conteúdo do Culto ao Vivo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
       </section>
     </>}
-    {tab === "favorites" && <>
+    {tab === "library" && <section className="card">\n      <small>ITENS JÁ CADASTRADOS NO SPRESENTER</small><h2>Biblioteca do SPresenter</h2>\n      <p className="hint">Lista os arquivos e louvores existentes na biblioteca do SPresenter. A Bíblia nativa é uma biblioteca separada e não é retornada pela API pública de assets.</p>\n      <label>Tipo de conteúdo<select value={libraryType} onChange={e => { setLibraryType(e.target.value); setLoadingLibrary(true); postMessage({ type: "list-library", assetType: e.target.value }); }}><option value="all">Todos os itens</option><option value="music">Louvores</option><option value="image">Imagens</option><option value="video">Vídeos</option><option value="slidePresentation">Apresentações</option><option value="audio">Áudios</option></select></label>\n      <button className="ghost" disabled={loadingLibrary} onClick={() => { setLoadingLibrary(true); postMessage({ type: "list-library", assetType: libraryType }); }}>{loadingLibrary ? "Atualizando..." : "Atualizar lista"}</button>\n      {libraryAssets.length === 0 ? <p className="hint">{loadingLibrary ? "Carregando biblioteca..." : "Nenhum item encontrado nesta categoria."}</p> : libraryAssets.map((asset: any) => <div className="verse" key={asset.guid}><div className="verse-head"><div><strong>{asset.title || asset.name || "Item sem título"}</strong><small>{asset.type || "Arquivo"}{asset.artist ? " • " + asset.artist : ""}</small></div><button className="go" onClick={() => { if (asset.type === "music") postMessage({ type: "present-song", guid: asset.guid, index: 0, output, contentLayer }); else postMessage({ type: "open-media" }); }}> {asset.type === "music" ? "▶ Enviar" : "Abrir mídia"} </button></div></div>)}\n      <p className="hint">Louvores podem ser enviados diretamente para a camada Conteúdo. Para imagens, vídeos e apresentações, a lista permite localizar o item e abrir o painel nativo de mídia; o SDK não documenta uma operação genérica para projetar esses tipos.</p>\n    </section>}\n    {tab === "favorites" && <>
       <section className="card">
         <small>FUNDO DA MINISTRAÇÃO</small>
         <h2>Enviar somente o fundo</h2>
