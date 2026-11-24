@@ -5,6 +5,9 @@
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
   const previousBackgrounds = /* @__PURE__ */ new Map();
+  let bibleWatchTimer;
+  let bibleWatchConfig = { output: "0", captureLayer: 0 };
+  let lastBibleSnapshot = "";
   function safeText(value) {
     return String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   }
@@ -142,8 +145,28 @@
     if (!textCandidates.length) {
       throw new Error("Não consegui localizar o texto bíblico nos dados da camada selecionada. Confira se o versículo está ao vivo na camada escolhida.");
     }
+    if (!book) throw new Error("A camada ao vivo não contém uma referência bíblica identificável.");
     const text = textCandidates[0].slice(0, 3e3);
     spresenter.ui.postMessage({ type: "captured", reference, book, version, text, raw: lines.join(" | ").slice(0, 3e3) });
+  }
+  function startBibleWatch() {
+    if (bibleWatchTimer) return;
+    bibleWatchTimer = setInterval(async () => {
+      try {
+        const live = await spresenter.live.read(bibleWatchConfig.output);
+        const presentation = live?.[bibleWatchConfig.captureLayer];
+        const props = presentation?.props;
+        if (!props) {
+          lastBibleSnapshot = "";
+          return;
+        }
+        const snapshot = JSON.stringify(props);
+        if (!snapshot || snapshot === lastBibleSnapshot) return;
+        lastBibleSnapshot = snapshot;
+        await captureLive({ type: "capture-live", output: bibleWatchConfig.output, captureLayer: bibleWatchConfig.captureLayer });
+      } catch {
+      }
+    }, 1200);
   }
   async function listLibrary(msg) {
     const requested = String(msg.assetType ?? "all");
@@ -205,8 +228,14 @@
     const msg = raw;
     if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
     try {
-      if (msg.type === "init") await sendState();
-      else if (msg.type === "save-group-backgrounds") {
+      if (msg.type === "init") {
+        await sendState();
+        startBibleWatch();
+      } else if (msg.type === "watch-bible") {
+        bibleWatchConfig = { output: String(msg.output ?? "0"), captureLayer: Number(msg.captureLayer ?? 0) };
+        lastBibleSnapshot = "";
+        startBibleWatch();
+      } else if (msg.type === "save-group-backgrounds") {
         const backgrounds = msg.groupBackgrounds;
         await spresenter.storage.set(GROUP_BACKGROUNDS_KEY, backgrounds);
         await sendState();
