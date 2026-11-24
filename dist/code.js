@@ -168,101 +168,6 @@
       }
     }, 1200);
   }
-  const bibleBooks = [
-    ["Gênesis", "gn", ["genesis", "gen"]],
-    ["Êxodo", "ex", ["exodo", "exodus"]],
-    ["Levítico", "lv", ["levitico", "lev"]],
-    ["Números", "nm", ["numeros", "num"]],
-    ["Deuteronômio", "dt", ["deuteronomio", "deut"]],
-    ["Josué", "js", ["josue", "joshua"]],
-    ["Juízes", "jz", ["juizes", "juizes"]],
-    ["Rute", "rt", ["rute", "ruth"]],
-    ["1 Samuel", "1sm", ["1samuel", "i samuel"]],
-    ["2 Samuel", "2sm", ["2samuel", "ii samuel"]],
-    ["1 Reis", "1rs", ["1reis", "i reis"]],
-    ["2 Reis", "2rs", ["2reis", "ii reis"]],
-    ["1 Crônicas", "1cr", ["1cronicas", "i cronicas"]],
-    ["2 Crônicas", "2cr", ["2cronicas", "ii cronicas"]],
-    ["Esdras", "ed", ["esdras", "ezra"]],
-    ["Neemias", "ne", ["neemias", "nehemias"]],
-    ["Ester", "et", ["ester", "esther"]],
-    ["Jó", "job", ["jo", "jó", "job"]],
-    ["Salmos", "sl", ["salmo", "salmos", "psalms"]],
-    ["Provérbios", "pv", ["proverbios", "prov"]],
-    ["Eclesiastes", "ec", ["eclesiastes", "ecclesiastes"]],
-    ["Cânticos", "ct", ["canticos", "cantares", "song of songs"]],
-    ["Isaías", "is", ["isaias", "isaiah"]],
-    ["Jeremias", "jr", ["jeremias", "jer"]],
-    ["Lamentações", "lm", ["lamentacoes", "lamentations"]],
-    ["Ezequiel", "ez", ["ezequiel", "ezekiel"]],
-    ["Daniel", "dn", ["daniel", "dan"]],
-    ["Oséias", "os", ["oseias", "osea"]],
-    ["Joel", "jl", ["joel"]],
-    ["Amós", "am", ["amos"]],
-    ["Obadias", "ob", ["obadias", "obadiah"]],
-    ["Jonas", "jn", ["jonas", "jonah"]],
-    ["Miquéias", "mq", ["miqueias", "micah"]],
-    ["Naum", "na", ["naum", "nahum"]],
-    ["Habacuque", "hc", ["habacuque", "habakkuk"]],
-    ["Sofonias", "sf", ["sofonias", "zephaniah"]],
-    ["Ageu", "ag", ["ageu", "haggai"]],
-    ["Zacarias", "zc", ["zacarias", "zechariah"]],
-    ["Malaquias", "ml", ["malaquias", "malachi"]],
-    ["Mateus", "mt", ["mateus", "matthew"]],
-    ["Marcos", "mc", ["marcos", "mark"]],
-    ["Lucas", "lc", ["lucas", "luke"]],
-    ["João", "jo", ["joao", "john"]],
-    ["Atos", "at", ["atos", "acts"]],
-    ["Romanos", "rm", ["romanos", "romans"]],
-    ["1 Coríntios", "1co", ["1corintios", "i corintios"]],
-    ["2 Coríntios", "2co", ["2corintios", "ii corintios"]],
-    ["Gálatas", "gl", ["galatas", "galatians"]],
-    ["Efésios", "ef", ["efesios", "ephesians"]],
-    ["Filipenses", "fp", ["filipenses", "philippians"]],
-    ["Colossenses", "cl", ["colossenses", "colossians"]],
-    ["1 Tessalonicenses", "1ts", ["1tessalonicenses", "i tessalonicenses"]],
-    ["2 Tessalonicenses", "2ts", ["2tessalonicenses", "ii tessalonicenses"]],
-    ["1 Timóteo", "1tm", ["1timoteo", "i timoteo"]],
-    ["2 Timóteo", "2tm", ["2timoteo", "ii timoteo"]],
-    ["Tito", "tt", ["tito"]],
-    ["Filemom", "fm", ["filemom", "philemon"]],
-    ["Hebreus", "hb", ["hebreus", "hebrews"]],
-    ["Tiago", "tg", ["tiago", "james"]],
-    ["1 Pedro", "1pe", ["1pedro", "i pedro"]],
-    ["2 Pedro", "2pe", ["2pedro", "ii pedro"]],
-    ["1 João", "1jo", ["1joao", "i joao"]],
-    ["2 João", "2jo", ["2joao", "ii joao"]],
-    ["3 João", "3jo", ["3joao", "iii joao"]],
-    ["Judas", "jd", ["judas", "jude"]],
-    ["Apocalipse", "ap", ["apocalipse", "revelation"]]
-  ];
-  function normalizeBibleName(value) {
-    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]/g, "");
-  }
-  async function lookupBible(msg) {
-    const raw = String(msg.reference ?? "").trim();
-    const match = raw.match(/^(.+?)\s+(\d{1,3})(?:\s*:\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?$/);
-    if (!match) throw new Error("Use o formato Livro capítulo:versículo, por exemplo João 3:16 ou João 3:16-17.");
-    const enteredBook = normalizeBibleName(match[1]);
-    const found = bibleBooks.find(([name, , aliases]) => [name, ...aliases].some((alias) => normalizeBibleName(alias) === enteredBook));
-    if (!found) throw new Error("Não reconheci esse livro. Confira o nome e tente novamente.");
-    const chapter = Number(match[2]);
-    const firstVerse = match[3] ? Number(match[3]) : 1;
-    const lastVerse = match[4] ? Number(match[4]) : firstVerse;
-    if (chapter < 1 || firstVerse < 1 || lastVerse < firstVerse || lastVerse - firstVerse > 5) throw new Error("Informe um capítulo e até seis versículos por consulta.");
-    const version = String(msg.version ?? "nvi").toLowerCase();
-    const url = `https://abibliadigital.api.br/api/verses/${encodeURIComponent(version)}/${encodeURIComponent(found[1])}/${chapter}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("O serviço bíblico não respondeu agora. Tente novamente em instantes.");
-    const payload = await response.json();
-    const rows = Array.isArray(payload) ? payload : payload.verses ?? payload.data?.verses ?? [];
-    const selected = rows.filter((item) => Number(item.number ?? item.verse) >= firstVerse && Number(item.number ?? item.verse) <= lastVerse);
-    if (!selected.length || selected.length !== lastVerse - firstVerse + 1) throw new Error("Não encontrei todos os versículos dessa referência. Confira capítulo e numeração.");
-    const text = selected.map((item) => `${item.number ?? item.verse}. ${String(item.text ?? "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").trim()}`).join("\\n");
-    if (!text.trim()) throw new Error("A consulta retornou sem texto bíblico.");
-    const reference = `${found[0]} ${chapter}:${firstVerse}${lastVerse > firstVerse ? "-" + lastVerse : ""}`;
-    spresenter.ui.postMessage({ type: "bible-found", result: { reference, book: found[0], text } });
-  }
   async function listLibrary(msg) {
     const requested = String(msg.assetType ?? "all");
     const assets = await spresenter.assets.list(requested === "all" ? void 0 : { type: requested });
@@ -367,13 +272,7 @@
         spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolved, category));
         spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
       } else if (msg.type === "present") await present(msg);
-      else if (msg.type === "lookup-bible") {
-        try {
-          await lookupBible(msg);
-        } catch (error) {
-          spresenter.ui.postMessage({ type: "bible-error", message: error instanceof Error ? error.message : "Falha ao consultar a Bíblia." });
-        }
-      } else if (msg.type === "list-library") await listLibrary(msg);
+      else if (msg.type === "list-library") await listLibrary(msg);
       else if (msg.type === "search-songs") await searchSongs(msg);
       else if (msg.type === "get-song-sections") await getSongSections(msg);
       else if (msg.type === "present-song") await presentSong(msg);
