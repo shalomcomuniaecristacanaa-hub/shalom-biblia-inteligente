@@ -252,7 +252,8 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       spresenter.live.element(output, backgroundLayer, "shalom-background").setHtml(backgroundHtml(resolved, category));
       spresenter.ui.postMessage({ type: "notice", message: `Fundo de ${category} enviado sem alterar o versículo.` });
     } else if (msg.type === "present") await present(msg);
-    else if (msg.type === "list-library") await listLibrary(msg);\n    else if (msg.type === "search-songs") await searchSongs(msg);
+    else if (msg.type === "list-library") await listLibrary(msg);
+    else if (msg.type === "search-songs") await searchSongs(msg);
     else if (msg.type === "get-song-sections") await getSongSections(msg);
     else if (msg.type === "present-song") await presentSong(msg);
     else if (msg.type === "present-message") await presentMessage(msg);
