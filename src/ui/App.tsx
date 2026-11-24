@@ -267,7 +267,7 @@ export function App() {
               ? <img src={selectedBackgroundAsset.thumbnail} alt={selectedBackgroundAsset.title || "Prévia da mídia"} style={{display:"block",width:"100%",aspectRatio:"16/9",objectFit:"cover",marginTop:8,borderRadius:8}} />
               : <div style={{marginTop:8,aspectRatio:"16/9",display:"grid",placeItems:"center",background:"rgba(120,120,120,.12)",borderRadius:8}}>Prévia não disponível</div>}
             <p className="hint">{selectedBackgroundAsset ? (selectedBackgroundAsset.title || selectedBackgroundAsset.name) + " · " + selectedBackgroundAsset.type : "Selecione uma mídia local."}</p>
-            <button className="primary wide" disabled={!selectedBackgroundAsset} onClick={() => postMessage({ type:"present-library-background", guid:selectedBackgroundAsset.guid, output, backgroundLayer })}>▶ Enviar fundo para os telões</button>
+            <button className="primary wide" disabled={!selectedBackgroundAsset} onClick={() => postMessage({ type:"present-library-background", guid:selectedBackgroundAsset.guid, thumbnail:selectedBackgroundAsset.thumbnail, output, backgroundLayer })}>▶ Enviar fundo para os telões</button>
           </div>
           <div className="importbox">
             <strong>Último fundo enviado</strong>
@@ -277,7 +277,7 @@ export function App() {
             </> : <p className="hint">Nenhuma mídia enviada por este painel nesta sessão.</p>}
           </div>
         </div>
-        <p className="hint">A lista inclui mídias locais e itens Worshipwide encontrados no setlist ativo. O catálogo Worshipwide completo não possui, na API pública documentada, uma operação de listagem para plugins; adicione o motion ao setlist do SPresenter para ele aparecer aqui. O envio usa a camada Fundo e preserva a camada Conteúdo do louvor.</p>
+        <p className="hint">A lista inclui imagens e vídeos da biblioteca e motions que já estejam no setlist ativo. O catálogo remoto completo do Worshipwide ainda não é enumerável pela API pública do plugin. Imagens usam o renderer do SPresenter; vídeos e motions são enviados como fundo. A camada Conteúdo do louvor é preservada.</p>
       </section>
       <section className="card">
         <small>COMUNICAÇÃO COM A IGREJA</small><h2>Mensagem informativa</h2>
