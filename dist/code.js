@@ -3,6 +3,7 @@
   const STORE_KEY = "shalom.verses.v1";
   const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
   const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
+  const CONNECTION_SETTINGS_KEY = "shalom.connection-settings.v1";
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
   const previousBackgrounds = /* @__PURE__ */ new Map();
@@ -31,14 +32,15 @@
     return await spresenter.storage.get(STORE_KEY) ?? [];
   }
   async function sendState() {
-    const [verses, outputs, layers, groupBackgrounds, eventSchedules] = await Promise.all([
+    const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings] = await Promise.all([
       getVerses(),
       spresenter.outputs.list(),
       spresenter.layers.list(),
       spresenter.storage.get(GROUP_BACKGROUNDS_KEY),
-      spresenter.storage.get(EVENT_SCHEDULES_KEY)
+      spresenter.storage.get(EVENT_SCHEDULES_KEY),
+      spresenter.storage.get(CONNECTION_SETTINGS_KEY)
     ]);
-    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [] });
+    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" } });
   }
   function stagePresentation(title, elementId) {
     return {
@@ -348,6 +350,24 @@
         await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
         await sendState();
         spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
+      } else if (msg.type === "save-connection-settings") {
+        const settings = msg.connectionSettings ?? {};
+        const validateIp = (value, label) => {
+          const ip = String(value ?? "").trim();
+          if (!ip) return "";
+          const parts = ip.split(".");
+          if (parts.length !== 4 || parts.some((part) => !/^\\d{1,3}$/.test(part) || Number(part) > 255)) {
+            throw new Error("Informe um IPv4 válido para " + label + " (ex.: 192.168.1.50).");
+          }
+          return ip;
+        };
+        const normalized = {
+          grandmaIp: validateIp(settings.grandmaIp, "GrandMA2"),
+          vmixIp: validateIp(settings.vmixIp, "vMix")
+        };
+        await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
       } else if (msg.type === "delete-event-schedule") {
         const schedules = await spresenter.storage.get(EVENT_SCHEDULES_KEY) ?? [];
         await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules.filter((item) => item.id !== msg.id));
