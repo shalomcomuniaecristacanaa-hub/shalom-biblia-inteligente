@@ -138,6 +138,23 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const handleLiveShortcut = (event: KeyboardEvent) => {
+      if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key === "F10") {
+        event.preventDefault();
+        postMessage({ type: "clear-content", output, contentLayer });
+        setNotice("Letra / conteúdo removido do telão (F10).");
+      } else if (event.key === "F11") {
+        event.preventDefault();
+        postMessage({ type: "clear-background", output, backgroundLayer });
+        setNotice("Fundo removido do telão (F11).");
+      }
+    };
+    window.addEventListener("keydown", handleLiveShortcut);
+    return () => window.removeEventListener("keydown", handleLiveShortcut);
+  }, [output, contentLayer, backgroundLayer]);
+
+  useEffect(() => {
     const reference = bibleReference.trim();
     if (!reference) { setBibleResult(null); setBibleStatus(""); return; }
     let cancelled = false;
@@ -292,9 +309,15 @@ export function App() {
         <p className="hint">Não vou simular um carregamento de PowerPoint que não consiga reproduzir os vídeos corretamente.</p>
       </section>
       <section className="card livebar">
-        <small>SAÍDA E CAMADA DE CONTEÚDO</small>
+        <small>SAÍDA E CAMADAS DO TELÃO</small>
         <label>Saída<select value={output} onChange={e => setOutput(e.target.value)}>{outputs.map(o => <option key={o.index} value={String(o.index)}>{o.name || "Saída " + o.index} (#{o.index})</option>)}</select></label>
         <label>Camada Conteúdo<select value={contentLayer} onChange={e => setContentLayer(e.target.value)}>{layerOptions}</select></label>
+        <label>Camada Fundo<select value={backgroundLayer} onChange={e => setBackgroundLayer(e.target.value)}>{layerOptions}</select></label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginTop:12}}>
+          <button className="danger wide" onClick={() => postMessage({ type:"clear-content", output, contentLayer })}>Limpar letra / conteúdo · F10</button>
+          <button className="ghost wide" onClick={() => postMessage({ type:"clear-background", output, backgroundLayer })}>Limpar fundo · F11</button>
+        </div>
+        <p className="hint">F10 limpa somente a camada Conteúdo. F11 limpa somente a camada Fundo. Os atalhos funcionam enquanto o painel do plugin estiver aberto.</p>
       </section>
     </>}
     {tab === "library" && <section className="card">
@@ -333,7 +356,9 @@ export function App() {
         )}</div>}
       </section>
       <button className="wide primary" onClick={() => postMessage({ type: "restore-previous-background", output, contentLayer, backgroundLayer })}>Encerrar versículo e voltar ao fundo anterior</button>
-      <button className="wide ghost" onClick={() => postMessage({ type: "clear", output, contentLayer, backgroundLayer })}>Limpar Conteúdo e Fundo</button>
+      <button className="wide danger" onClick={() => postMessage({ type: "clear-content", output, contentLayer })}>Limpar letra / conteúdo · F10</button>
+      <button className="wide ghost" onClick={() => postMessage({ type: "clear-background", output, backgroundLayer })}>Limpar fundo · F11</button>
+      <button className="wide ghost" onClick={() => postMessage({ type: "clear", output, contentLayer, backgroundLayer })}>Limpar os dois</button>
     </>}
     {tab === "add" && <section className="card">
       <div className="section-title"><div><small>BIBLIOTECA PESSOAL</small><h2>{editing ? "Editar favorito" : "Adicionar versículo"}</h2></div></div>
