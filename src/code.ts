@@ -198,7 +198,7 @@ async function presentMessage(msg: UiMessage) {
   await spresenter.live.setState(output, layer, { show: true, opacity: 1 });
   spresenter.ui.postMessage({ type: "presented", message: "Mensagem informativa apresentada." });
 }
-\nspresenter.ui.onmessage = async (raw: unknown) => {
+spresenter.ui.onmessage = async (raw: unknown) => {
   const msg = raw as UiMessage;
   if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
   try {
