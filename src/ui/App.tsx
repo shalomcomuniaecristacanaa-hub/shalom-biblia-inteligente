@@ -5,6 +5,11 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
 const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "", book: "" });
+function sectionBody(section: any): string {
+  const value = section?.text ?? section?.content ?? section?.lyrics ?? section?.value ?? "";
+  if (Array.isArray(value)) return value.map(item => typeof item === "string" ? item : String(item?.text ?? "")).filter(Boolean).join("\\n");
+  return typeof value === "string" ? value : "";
+}
 
 export function App() {
   const [verses, setVerses] = useState<Verse[]>([]);
@@ -210,7 +215,11 @@ export function App() {
           <p className="hint">Encontrado fora da biblioteca local. Para usar no telão, importe o louvor e sua letra/licença para o SPresenter.</p>
           {song.url && <a href={song.url} target="_blank" rel="noreferrer">Abrir na Apple Music / iTunes</a>}
         </div> : <div className="verse" key={song.guid}><div className="verse-head"><div><strong>{song.title || song.name}</strong><small>{song.artist || song.author || "Louvor cadastrado"}</small></div><button className="go" onClick={() => postMessage({ type: "get-song-sections", guid: song.guid })}>Ver partes</button></div>
-          {(songSections[song.guid] || []).map((section: any, index: number) => <button className="ghost" key={index} style={{margin:"5px 5px 0 0"}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>{section.type || "Parte"} {index + 1} — Apresentar</button>)}
+          {(songSections[song.guid] || []).map((section: any, index: number) => <div key={index} style={{marginTop:10,padding:12,border:"1px solid var(--border, #444)",borderRadius:8}}>
+            <strong>{section.type || "Parte"} {index + 1}</strong>
+            {sectionBody(section) && <p style={{whiteSpace:"pre-wrap",margin:"8px 0"}}>{sectionBody(section)}</p>}
+            <button className="ghost" onClick={() => postMessage({ type: "present-song", guid: song.guid, index, output, contentLayer })}>▶ Enviar esta parte aos telões</button>
+          </div>)}
           <button className="primary" style={{marginTop:8}} onClick={() => postMessage({ type: "present-song", guid: song.guid, index: 0, output, contentLayer })}>▶ Apresentar louvor</button>
         </div>)}
         {!songs.length && !searchingSongs && !songSearchStatus && <p className="hint">Pesquise para localizar primeiro na biblioteca do SPresenter e, se não houver resultado, na internet.</p>}
