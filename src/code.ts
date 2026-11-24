@@ -424,6 +424,13 @@ spresenter.ui.onmessage = async (raw: unknown) => {
         prepared.delete(`${output}:${backgroundLayer}:background`);
         spresenter.ui.postMessage({ type: "notice", message: "Versículo encerrado. Fundo anterior restaurado." });
       }
+    } else if (msg.type === "clear-background") {
+      const output = String(msg.output ?? "0");
+      const backgroundLayer = Number(msg.backgroundLayer);
+      if (!Number.isInteger(backgroundLayer)) throw new Error("Selecione a camada Fundo.");
+      await spresenter.live.clear(output, backgroundLayer);
+      prepared.delete(`${output}:${backgroundLayer}:background`);
+      spresenter.ui.postMessage({ type: "notice", message: "Fundo removido do telão." });
     } else if (msg.type === "clear") {
       const output = String(msg.output ?? "0");
       await spresenter.live.clear(output, Number(msg.contentLayer));
