@@ -5,6 +5,25 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
 type ConnectionSettings = { grandmaIp: string; vmixIp: string };
+type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number };
+type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
+const defaultLightingGroups = (): LightingGroup[] => [
+  { id: "front", name: "Frente", intensity: 100, color: "#ffffff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
+  { id: "back", name: "Contra", intensity: 70, color: "#2878ff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
+  { id: "moving", name: "Moving Heads", intensity: 50, color: "#8b35e8", movement: "sweep", colorBehavior: "static", speed: 45, strobe: 0 },
+  { id: "led", name: "Painel LED", intensity: 80, color: "#15d6dc", movement: "fixed", colorBehavior: "wave", speed: 45, strobe: 0 }
+];
+const lightingPresets = [
+  { id: "wave", name: "Onda LED", description: "Cores percorrem os LEDs em sequência", movement: "fixed", colorBehavior: "wave", color: "#168cff" },
+  { id: "rainbow", name: "Ciclo de cores", description: "Alternância contínua de cores", movement: "fixed", colorBehavior: "rainbow", color: "#8b35e8" },
+  { id: "flash", name: "Piscas", description: "Pulsos rápidos de luz", movement: "fixed", colorBehavior: "static", color: "#ffffff", strobe: 65 },
+  { id: "pulse", name: "Pulso suave", description: "Intensidade aumenta e diminui", movement: "fixed", colorBehavior: "pulse", color: "#2878ff" },
+  { id: "sweep", name: "Varredura", description: "Movimento lateral dos moving heads", movement: "sweep", colorBehavior: "static", color: "#8b35e8" },
+  { id: "circle", name: "Movimento circular", description: "Movimento circular dos moving heads", movement: "circle", colorBehavior: "static", color: "#15d6dc" },
+  { id: "chase", name: "Perseguição", description: "Grupos acendem em sequência", movement: "fixed", colorBehavior: "chase", color: "#ffb02e" },
+  { id: "warm", name: "Culto / Palavra", description: "Luz quente e estável", movement: "fixed", colorBehavior: "static", color: "#ffbd72" }
+];
+
 const blankConnections = (): ConnectionSettings => ({ grandmaIp: "", vmixIp: "" });
 type EventSchedule = { id: string; name: string; date: string; time: string; coverGuid: string; song: string; grandmaCommand: string; vmixFunction: string; startStream: boolean; enabled: boolean };
 const blankSchedule = (): EventSchedule => ({ id: "", name: "", date: "", time: "", coverGuid: "", song: "", grandmaCommand: "", vmixFunction: "", startStream: false, enabled: true });
@@ -27,7 +46,7 @@ export function App() {
   const [contentLayer, setContentLayer] = useState("0");
   const [backgroundLayer, setBackgroundLayer] = useState("1");
   const [captureLayer, setCaptureLayer] = useState("0");
-  const [tab, setTab] = useState<"dashboard" | "scheduler" | "live" | "library" | "favorites" | "add" | "settings">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "scheduler" | "live" | "library" | "favorites" | "add" | "settings" | "lighting">("dashboard");
   const [bibleReference, setBibleReference] = useState("");
   const [bibleVersion, setBibleVersion] = useState("nvi");
   const bibleVersions = [
@@ -67,12 +86,17 @@ export function App() {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
+  const [lightingGroups, setLightingGroups] = useState<LightingGroup[]>(defaultLightingGroups());
+  const [lightingScenes, setLightingScenes] = useState<LightingScene[]>([]);
+  const [lightingName, setLightingName] = useState("Nova cena");
+  const [lightingPreset, setLightingPreset] = useState("custom");
+  const [lightingTransition, setLightingTransition] = useState(3);
 
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
       if (m.type === "state") {
-        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
         const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
         const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
@@ -234,6 +258,7 @@ export function App() {
       <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>◷ Painel principal</button>
       <button className={tab === "scheduler" ? "active" : ""} onClick={() => { setTab("scheduler"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); if (!libraryAssets.length) { setLoadingLibrary(true); postMessage({type:"list-library",assetType:"all"}); } }}>＋ Cadastro de eventos</button>
       <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>● Culto ao Vivo</button>
+      <button className={tab === "lighting" ? "active" : ""} onClick={() => setTab("lighting")}>✦ Estúdio de iluminação</button>
       <button className={tab === "library" ? "active" : ""} onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({ type: "list-library", assetType: libraryType }); }}>▤ Biblioteca SPresenter</button>
       <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>★ Favoritos</button>
       <button className={tab === "add" ? "active" : ""} onClick={() => { setTab("add"); if (!verse.id) setVerse(blank()); }}>＋ Adicionar</button>
