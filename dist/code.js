@@ -46,11 +46,54 @@
     await options.persist({ ...checkpoint, stepResults: { ...checkpoint.stepResults } });
     return checkpoint;
   }
+  function isPrivateIpv4(host) {
+    const parts = host.split(".");
+    if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+    const [a, b] = parts.map(Number);
+    return a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168;
+  }
+  function normalizeDevice(input) {
+    const id = String(input?.id ?? "").trim();
+    const name = String(input?.name ?? "").trim();
+    const host = String(input?.host ?? "").trim();
+    const port = Number(input?.port);
+    const healthPath = String(input?.healthPath ?? "/health").trim();
+    if (!id || !name) throw new Error("Informe um nome para o equipamento.");
+    if (!isPrivateIpv4(host)) throw new Error("Use um IPv4 privado da rede local (10.x, 172.16–31.x ou 192.168.x).");
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Informe uma porta válida (1–65535).");
+    if (!healthPath.startsWith("/") || healthPath.startsWith("//") || /[\r\n]/.test(healthPath)) throw new Error("O caminho de saúde deve começar com / e ser um caminho local.");
+    const kind = ["vmix", "agent", "other"].includes(input?.kind) ? input.kind : "other";
+    return { id, name, kind, host, port, healthPath, enabled: input?.enabled !== false };
+  }
+  async function probeDevice(device) {
+    const checkedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4e3);
+    try {
+      const response = await fetch(`http://${device.host}:${device.port}${device.healthPath}`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal
+      });
+      if (!response.ok) return { id: device.id, online: false, checkedAt, statusCode: response.status, error: `HTTP ${response.status}` };
+      return { id: device.id, online: true, checkedAt, statusCode: response.status };
+    } catch (error) {
+      return {
+        id: device.id,
+        online: false,
+        checkedAt,
+        error: error instanceof Error && error.name === "AbortError" ? "Tempo limite de 4 segundos excedido." : error instanceof Error ? error.message : String(error)
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
   const STORE_KEY = "shalom.verses.v1";
   const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
   const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
   const CONNECTION_SETTINGS_KEY = "shalom.connection-settings.v1";
   const LIGHTING_SCENES_KEY = "shalom.lighting-scenes.v1";
+  const MANAGED_DEVICES_KEY = "shalom.managed-devices.v1";
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
   const previousBackgrounds = /* @__PURE__ */ new Map();
@@ -220,7 +263,7 @@
     return await spresenter.storage.get(STORE_KEY) ?? [];
   }
   async function sendState() {
-    const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings, lightingScenes] = await Promise.all([
+    const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings, lightingScenes, managedDevices] = await Promise.all([
       getVerses(),
       spresenter.outputs.list(),
       spresenter.layers.list(),
@@ -229,7 +272,7 @@
       spresenter.storage.get(CONNECTION_SETTINGS_KEY),
       spresenter.storage.get(LIGHTING_SCENES_KEY)
     ]);
-    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [] });
+    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [], managedDevices: managedDevices ?? [] });
   }
   function stagePresentation(title, elementId) {
     return {
@@ -601,6 +644,28 @@
         await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
         await sendState();
         spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
+      } else if (msg.type === "save-managed-devices") {
+        const input = Array.isArray(msg.devices) ? msg.devices : [];
+        if (input.length > 30) throw new Error("O limite é de 30 equipamentos cadastrados.");
+        const devices = input.map(normalizeDevice);
+        if (new Set(devices.map((device) => device.id)).size !== devices.length) throw new Error("Existem IDs duplicados no cadastro de equipamentos.");
+        await spresenter.storage.set(MANAGED_DEVICES_KEY, devices);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Cadastro de equipamentos da rede salvo." });
+      } else if (msg.type === "test-managed-device") {
+        const devices = await spresenter.storage.get(MANAGED_DEVICES_KEY) ?? [];
+        const device = devices.find((item) => item.id === String(msg.id));
+        if (!device) throw new Error("Equipamento não encontrado.");
+        const result = await probeDevice(device);
+        const updated = devices.map((item) => item.id === device.id ? {
+          ...item,
+          lastStatus: result.online ? "online" : "offline",
+          lastCheckedAt: result.checkedAt,
+          lastError: result.error ?? ""
+        } : item);
+        await spresenter.storage.set(MANAGED_DEVICES_KEY, updated);
+        await sendState();
+        spresenter.ui.postMessage({ type: "managed-device-test-result", ...result, name: device.name });
       } else if (msg.type === "delete-event-schedule") {
         const schedules = await spresenter.storage.get(EVENT_SCHEDULES_KEY) ?? [];
         await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules.filter((item) => item.id !== msg.id));
