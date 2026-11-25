@@ -125,9 +125,6 @@ export function App() {
     } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
   };
 
-  const [grandmaCatalog, setGrandmaCatalog] = useState<{name:string;response:string}[]>([]);
-  const [grandmaSequenceNumber, setGrandmaSequenceNumber] = useState("90");
-  const [grandmaSceneName, setGrandmaSceneName] = useState("Nova cena Shalom");
   const readGrandmaCatalog = async () => {
     const queries = [{name:"Grupos",command:"List Group Thru 10"},{name:"Presets",command:"List Preset"},{name:"Sequências / cenas",command:"List Sequence"},{name:"Macros",command:"List Macro"}];
     const results: {name:string;response:string}[] = [];
