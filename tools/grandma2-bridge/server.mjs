@@ -1,6 +1,6 @@
 /**
- * Shalom GrandMA2 local bridge (Windows/macOS/Linux)
- * Local-only HTTP API; credentials stay in memory and are never logged.
+ * Shalom GrandMA2 local bridge.
+ * HTTP is loopback-only; Telnet credentials stay in process memory.
  */
 import http from "node:http";
 import net from "node:net";
@@ -12,51 +12,98 @@ let socket = null;
 let buffer = "";
 let connected = false;
 let loggedIn = false;
+let loginTimer = null;
+let connectWaiter = null;
 let pending = [];
 let lastError = "";
 
-function closeSocket() {
+function cleanTelnet(chunk) {
+  // Remove Telnet IAC negotiation triplets and command bytes from the data stream.
+  const input = Buffer.from(chunk);
+  const out = [];
+  for (let i = 0; i < input.length; i++) {
+    if (input[i] === 255) {
+      const cmd = input[i + 1];
+      if (cmd === 255) { out.push(255); i++; continue; }
+      if (cmd === 250) { // sub-negotiation: skip through IAC SE
+        i += 2;
+        while (i < input.length && !(input[i] === 255 && input[i + 1] === 240)) i++;
+        i++;
+      } else if (cmd === 251 || cmd === 252 || cmd === 253 || cmd === 254) {
+        i += 2;
+      } else i++;
+      continue;
+    }
+    out.push(input[i]);
+  }
+  return Buffer.from(out).toString("utf8");
+}
+function closeSocket(reason = "Connection closed") {
   connected = false; loggedIn = false; buffer = "";
-  if (socket) { socket.destroy(); socket = null; }
-  pending.splice(0).forEach(p => p.reject(new Error("Connection closed")));
+  if (loginTimer) clearTimeout(loginTimer);
+  loginTimer = null;
+  if (connectWaiter) { connectWaiter.reject(new Error(reason)); connectWaiter = null; }
+  if (socket) { const old = socket; socket = null; old.destroy(); }
+  pending.splice(0).forEach(p => p.reject(new Error(reason)));
+}
+function onData(chunk) {
+  const text = cleanTelnet(chunk);
+  if (!text) return;
+  buffer = (buffer + text).slice(-65536);
+  const lower = buffer.toLowerCase();
+  if (!loggedIn && /(login|username|user name)\\s*[:>]?\\s*$/i.test(buffer.trim())) {
+    socket?.write(`Login ${config.username} ${config.password}\n`);
+    buffer = "";
+    return;
+  }
+  if (/\\[Channel\\]>/i.test(buffer)) {
+    loggedIn = true;
+    if (loginTimer) clearTimeout(loginTimer);
+    loginTimer = null;
+    if (connectWaiter) { connectWaiter.resolve(); connectWaiter = null; }
+    if (pending.length) {
+      const p = pending.shift();
+      const response = buffer.replace(/\\[Channel\\]>\\s*$/i, "").trim();
+      buffer = "";
+      p.resolve(response);
+    }
+  } else if (!loggedIn && /(wrong password|login failed|access denied)/i.test(lower)) {
+    lastError = "GrandMA2 recusou o usuário/senha.";
+    if (connectWaiter) { connectWaiter.reject(new Error(lastError)); connectWaiter = null; }
+    closeSocket(lastError);
+  }
 }
 function connect() {
+  if (connected && loggedIn && socket) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    closeSocket();
-    if (!config.host || !config.password) return reject(new Error("Configure host and password first."));
+    closeSocket("Reconnecting");
+    if (!config.host || !config.password) return reject(new Error("Configure IP e senha primeiro."));
     const s = net.createConnection({ host: config.host, port: config.port });
     socket = s;
-    const timeout = setTimeout(() => { s.destroy(); reject(new Error("Telnet connection timed out")); }, 8000);
-    s.on("connect", () => { clearTimeout(timeout); connected = true; resolve(); });
-    s.on("data", chunk => {
-      buffer += chunk.toString("utf8");
-      if (buffer.length > 65536) buffer = buffer.slice(-32768);
-      const lower = buffer.toLowerCase();
-      if (!loggedIn && (lower.includes("login") || lower.includes("username"))) {
-        s.write(`Login ${config.username} ${config.password}\n`);
-        loggedIn = true;
-      }
-      const prompt = /\[Channel\]>/i.test(buffer);
-      if (prompt && pending.length) {
-        const p = pending.shift();
-        const response = buffer; buffer = "";
-        p.resolve(response);
-      }
-    });
-    s.on("error", e => { lastError = e.message; clearTimeout(timeout); closeSocket(); reject(e); });
+    const timeout = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
+    connectWaiter = {
+      resolve: () => { clearTimeout(timeout); connected = true; loggedIn = true; resolve(); },
+      reject: error => { clearTimeout(timeout); reject(error); }
+    };
+    s.on("connect", () => { connected = true; });
+    s.on("data", onData);
+    s.on("error", e => { lastError = e.message; clearTimeout(timeout); closeSocket(e.message); reject(e); });
     s.on("close", () => { connected = false; loggedIn = false; });
   });
 }
 function send(command) {
-  if (!connected || !socket) throw new Error("Not connected");
-  if (/[\r\n]/.test(command)) throw new Error("One command per request");
+  if (!connected || !loggedIn || !socket) throw new Error("Conecte e autentique na GrandMA2 primeiro.");
+  if (/[\\r\\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
   return new Promise((resolve, reject) => {
+    const entry = { resolve, reject };
     const timer = setTimeout(() => {
-      const i = pending.findIndex(p => p.resolve === resolve);
+      const i = pending.indexOf(entry);
       if (i >= 0) pending.splice(i, 1);
-      reject(new Error("Command response timed out"));
-    }, 7000);
-    pending.push({ resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } });
+      reject(new Error("A GrandMA2 não retornou o prompt em 8 segundos."));
+    }, 8000);
+    entry.resolve = value => { clearTimeout(timer); resolve(value); };
+    entry.reject = error => { clearTimeout(timer); reject(error); };
+    pending.push(entry);
     socket.write(command + "\n");
   });
 }
@@ -66,31 +113,33 @@ function json(res, status, body) {
 }
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") return json(res, 204, {});
-  if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::1" && req.socket.remoteAddress !== "::ffff:127.0.0.1") return json(res, 403, { error: "Local access only" });
+  if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) return json(res, 403, { error: "Acesso permitido somente neste computador." });
   try {
     const url = new URL(req.url, `http://${HOST}:${PORT}`);
     if (req.method === "GET" && url.pathname === "/status") return json(res, 200, { connected, loggedIn, host: config.host, port: config.port, error: lastError });
     if (req.method !== "POST") return json(res, 404, { error: "Not found" });
     let body = "";
-    for await (const chunk of req) body += chunk;
+    for await (const chunk of req) { body += chunk; if (body.length > 8192) throw new Error("Request too large"); }
     const data = body ? JSON.parse(body) : {};
     if (url.pathname === "/configure") {
       const host = String(data.host || "").trim();
-      if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host)) return json(res, 400, { error: "Enter a valid IPv4 address" });
+      if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host)) return json(res, 400, { error: "Informe um endereço IPv4 válido." });
       const port = Number(data.port || 30000);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) return json(res, 400, { error: "Invalid port" });
-      config = { host, port, username: String(data.username || "administrator"), password: String(data.password || "") };
-      closeSocket();
+      if (!Number.isInteger(port) || port < 1 || port > 65535) return json(res, 400, { error: "Porta inválida." });
+      const username = String(data.username || "administrator").trim();
+      const password = String(data.password || "");
+      if (!username || !password) return json(res, 400, { error: "Usuário e senha são obrigatórios." });
+      closeSocket("Configuration changed");
+      config = { host, port, username, password };
+      lastError = "";
       return json(res, 200, { configured: true });
     }
-    if (url.pathname === "/connect") {
-      await connect();
-      return json(res, 200, { connected, loggedIn });
-    }
+    if (url.pathname === "/connect") { await connect(); return json(res, 200, { connected, loggedIn }); }
     if (url.pathname === "/command") {
       const command = String(data.command || "").trim();
-      if (!command) return json(res, 400, { error: "Command required" });
-      if (!connected) await connect();
+      if (!command) return json(res, 400, { error: "Comando obrigatório." });
+      if (command.length > 240) return json(res, 400, { error: "Comando muito longo." });
+      if (!connected || !loggedIn) await connect();
       return json(res, 200, { response: await send(command) });
     }
     if (url.pathname === "/disconnect") { closeSocket(); config.password = ""; return json(res, 200, { disconnected: true }); }
