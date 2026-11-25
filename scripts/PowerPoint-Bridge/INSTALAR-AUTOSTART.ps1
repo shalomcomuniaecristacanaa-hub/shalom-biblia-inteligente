@@ -11,8 +11,15 @@ $shortcut.WorkingDirectory = $PSScriptRoot
 $shortcut.Description = "Inicia o auxiliar local de controle do PowerPoint para o SPresenter"
 $shortcut.WindowStyle = 7
 $shortcut.Save()
-# Inicia agora, sem exigir que o usuario abra o INICIAR.bat.
-Start-Process -FilePath $shortcut.TargetPath -ArgumentList $shortcut.Arguments -WindowStyle Hidden
+# Inicia agora somente se o auxiliar ainda nao estiver ativo.
+$alreadyRunning = $false
+try {
+  $health = Invoke-RestMethod -Uri "http://127.0.0.1:17843/health" -TimeoutSec 2
+  $alreadyRunning = [bool]$health.connected
+} catch { $alreadyRunning = $false }
+if (-not $alreadyRunning) {
+  Start-Process -FilePath $shortcut.TargetPath -ArgumentList $shortcut.Arguments -WindowStyle Hidden
+}
 Write-Host "Inicializacao automatica configurada para os proximos logins."
 Write-Host "O auxiliar tambem foi iniciado nesta sessao."
 Write-Host "Abra o SPresenter > Culto ao Vivo e carregue o PowerPoint."
