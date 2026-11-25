@@ -292,6 +292,25 @@ export function App() {
       <p className="scheduler-note">O cadastro e o painel ficam disponíveis nesta versão. Antes de liberar execução automática, precisamos validar o canal de rede do GrandMA2 e do vMix para evitar disparos falsos.</p>
       <div className="saved-schedules"><h3>Programações cadastradas</h3>{eventSchedules.length ? eventSchedules.map(event=><div className="saved-schedule" key={event.id}><div><strong>{event.name}</strong><small>{event.date.split("-").reverse().join("/")} às {event.time}</small></div><div className="actions"><button className="ghost" onClick={() => {setScheduleDraft(event);setEditingSchedule(true);}}>Editar</button><button className="danger" onClick={() => postMessage({type:"delete-event-schedule",id:event.id})}>Excluir</button></div></div>) : <p className="hint">Nenhuma programação salva ainda.</p>}</div>
     </section>}
+    {tab === "lighting" && <section className="card">
+      <small>ESTÚDIO DE ILUMINAÇÃO · MODO DE TESTE</small><h2>Simulador local de cenas</h2>
+      <p className="hint">Este modo altera apenas a prévia do plugin. Não envia comandos à GrandMA2 nem controla luminárias físicas.</p>
+      <label>Nome da cena<input value={lightingName} onChange={e => setLightingName(e.target.value)} /></label>
+      <label>Preset<select value={lightingPreset} onChange={e => { const id=e.target.value; setLightingPreset(id); const preset=lightingPresets.find(p=>p.id===id); if (!preset) return; setLightingGroups(groups=>groups.map(g=>({...g,color:preset.color,movement:preset.movement,colorBehavior:preset.colorBehavior,strobe:(preset as any).strobe ?? 0}))); }}><option value="custom">Personalizado</option>{lightingPresets.map(p=><option key={p.id} value={p.id}>{p.name} — {p.description}</option>)}</select></label>
+      <label>Transição (segundos)<input type="number" min="0" max="60" value={lightingTransition} onChange={e=>setLightingTransition(Math.max(0,Math.min(60,Number(e.target.value)||0)))}/></label>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
+      {lightingGroups.map((g,i)=><div className="importbox" key={g.id}><strong>{g.name}</strong>
+        <label>Cor<input type="color" value={g.color} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,color:e.target.value}:x))}/></label>
+        <label>Intensidade: {g.intensity}%<input type="range" min="0" max="100" value={g.intensity} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,intensity:Number(e.target.value)}:x))}/></label>
+        <label>Movimento<select value={g.movement} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,movement:e.target.value}:x))}><option value="fixed">Fixo</option><option value="sweep">Varredura</option><option value="circle">Circular</option></select></label>
+        <label>Comportamento de cor<select value={g.colorBehavior} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,colorBehavior:e.target.value}:x))}><option value="static">Estática</option><option value="wave">Onda</option><option value="rainbow">Ciclo</option><option value="pulse">Pulso</option><option value="chase">Perseguição</option></select></label>
+        <label>Velocidade: {g.speed}<input type="range" min="0" max="100" value={g.speed} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,speed:Number(e.target.value)}:x))}/></label>
+        <label>Estrobo: {g.strobe}%<input type="range" min="0" max="100" value={g.strobe} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,strobe:Number(e.target.value)}:x))}/></label>
+        <div style={{height:12,borderRadius:6,background:g.color,opacity:g.intensity/100,boxShadow:"0 0 18px "+g.color}}/>
+      </div>)}</div>
+      <div className="actions"><button className="primary" onClick={()=>postMessage({type:"save-lighting-scene",scene:{id:"scene-"+Date.now(),name:lightingName.trim()||"Nova cena",preset:lightingPreset,transition:lightingTransition,groups:lightingGroups}})}>Salvar cena</button><button className="ghost" onClick={()=>{setLightingGroups(defaultLightingGroups());setLightingPreset("custom");}}>Restaurar padrão</button></div>
+      <h3>Cenas salvas</h3>{!lightingScenes.length?<p className="hint">Ainda não há cenas salvas.</p>:lightingScenes.map(scene=><div className="verse" key={scene.id}><div className="verse-head"><div><strong>{scene.name}</strong><small>{scene.groups.length} grupos · transição {scene.transition}s</small></div><button className="go" onClick={()=>{setLightingName(scene.name);setLightingPreset(scene.preset);setLightingTransition(scene.transition);setLightingGroups(scene.groups);}}>Carregar no simulador</button></div></div>)}
+    </section>}
     {tab === "live" && <>
       <section className="card">
         <small>CONTROLE DURANTE O CULTO</small><h2>Bíblia</h2>
