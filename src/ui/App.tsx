@@ -99,6 +99,9 @@ export function App() {
   const [grandmaPresetNumber, setGrandmaPresetNumber] = useState("1");
   const [grandmaSavePreset, setGrandmaSavePreset] = useState(false);
   const [grandmaCatalogLoading, setGrandmaCatalogLoading] = useState(false);
+  const [grandmaSequences, setGrandmaSequences] = useState<{number:string;name:string}[]>([]);
+  const [grandmaSequencesLoading, setGrandmaSequencesLoading] = useState(false);
+  const [grandmaSequencesStatus, setGrandmaSequencesStatus] = useState("");
   const [grandmaSelectedLightingSceneId, setGrandmaSelectedLightingSceneId] = useState("");
   const [grandmaImportedXmlName, setGrandmaImportedXmlName] = useState("");
   const [grandmaImportedObjects, setGrandmaImportedObjects] = useState<{kind:string;name:string;number:string}[]>([]);
@@ -135,6 +138,46 @@ export function App() {
       setGrandmaResponse(String(result.response || ""));
       setGrandmaBridgeStatus("Comando enviado; resposta recebida.");
     } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+
+  const readGrandmaSequences = async () => {
+    setGrandmaSequencesLoading(true);
+    setGrandmaSequencesStatus("Consultando List Sequence na GrandMA2...");
+    try {
+      const result = await bridgeRequest("/command", {command:"List Sequence"});
+      const raw = String(result.response || "").trim();
+      if (/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(raw)) {
+        setGrandmaSequences([]);
+        setGrandmaSequencesStatus("A GrandMA2 respondeu que não há sequences cadastradas.");
+        return;
+      }
+      const found = new Map<string,string>();
+      for (const line of raw.split(/\r?\n/)) {
+        const patterns = [
+          /^\s*(?:Sequence\s+)?(\d{1,4})\s+(?:["“](.+?)["”]|(.+?))\s*$/i,
+          /^\s*Sequence\s+(\d{1,4})\s*$/i
+        ];
+        for (const pattern of patterns) {
+          const match = line.match(pattern);
+          if (match) {
+            const number = match[1];
+            const name = String(match[2] || match[3] || ("Sequence " + number)).trim();
+            found.set(number, name);
+            break;
+          }
+        }
+      }
+      const list = [...found.entries()].map(([number,name])=>({number,name})).sort((a,b)=>Number(a.number)-Number(b.number));
+      setGrandmaSequences(list);
+      setGrandmaSequencesStatus(list.length
+        ? list.length + " sequences encontradas. Selecione uma para preencher o comando do evento."
+        : "A resposta chegou, mas o formato não permitiu identificar os números. Veja a resposta completa nas Configurações → Biblioteca da GrandMA2.");
+      setGrandmaResponse(raw);
+    } catch (error) {
+      setGrandmaSequencesStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGrandmaSequencesLoading(false);
+    }
   };
 
   const readGrandmaCatalog = async () => {
@@ -499,7 +542,7 @@ export function App() {
       <label>Nome do evento<input value={scheduleDraft.name} onChange={e => setScheduleDraft(v => ({...v,name:e.target.value}))} placeholder="Ex.: Culto de domingo à noite" /></label>
       <div className="twocol"><label>Data<input type="date" value={scheduleDraft.date} onChange={e => setScheduleDraft(v => ({...v,date:e.target.value}))} /></label><label>Horário<input type="time" value={scheduleDraft.time} onChange={e => setScheduleDraft(v => ({...v,time:e.target.value}))} /></label></div>
       <div className="scheduler-section"><h3>① SPresenter · Capa</h3><label>Imagem, vídeo ou motion<select value={scheduleDraft.coverGuid} onChange={e => setScheduleDraft(v => ({...v,coverGuid:e.target.value}))}><option value="">Não alterar a capa</option>{visualAssets.map((asset:any)=><option key={asset.guid} value={asset.guid}>{asset.title || asset.name || asset.guid}</option>)}</select></label><button className="ghost" onClick={() => { setTab("library"); setLoadingLibrary(true); postMessage({type:"list-library",assetType:"all"}); }}>Atualizar biblioteca de mídias</button></div>
-      <div className="scheduler-section"><h3>② GrandMA2 · Iluminação</h3><label>Comando da mesa<input value={scheduleDraft.grandmaCommand} onChange={e => setScheduleDraft(v => ({...v,grandmaCommand:e.target.value}))} placeholder="Ex.: Go Executor 1.1" /></label><p className="hint">Informe o comando do executor ou macro já preparado na mesa.</p></div>
+      <div className="scheduler-section"><h3>② GrandMA2 · Iluminação</h3><p className="hint">Carregue as sequences já cadastradas na mesa e escolha qual cena de iluminação ficará vinculada a este evento.</p><button type="button" className="ghost" disabled={grandmaSequencesLoading} onClick={readGrandmaSequences}>{grandmaSequencesLoading ? "Lendo cenas da mesa..." : "↻ Carregar cenas da GrandMA2"}</button>{grandmaSequencesStatus && <p className="hint">{grandmaSequencesStatus}</p>}<label>Cena / Sequence existente<select value={scheduleDraft.grandmaCommand} onChange={e => setScheduleDraft(v => ({...v,grandmaCommand:e.target.value}))}><option value="">Não selecionar cena de iluminação</option>{grandmaSequences.map(item=><option key={item.number} value={"Go Sequence "+item.number}>Sequence {item.number} · {item.name}</option>)}</select></label><label>Comando personalizado (opcional)<input value={scheduleDraft.grandmaCommand} onChange={e => setScheduleDraft(v => ({...v,grandmaCommand:e.target.value}))} placeholder="Ex.: Go Executor 1.1" /></label><p className="hint">A seleção gera o comando “Go Sequence número”. O comando fica salvo no evento; a execução automática da GrandMA2 pelo agendador ainda precisa ser conectada e validada.</p></div>
       <div className="scheduler-section"><h3>③ Louvor</h3><label>Louvor / identificação<input value={scheduleDraft.song} onChange={e => setScheduleDraft(v => ({...v,song:e.target.value}))} placeholder="Nome do louvor" /></label><label>URL do YouTube<input type="url" value={scheduleDraft.youtubeUrl || ""} onChange={e => setScheduleDraft(v => ({...v,youtubeUrl:e.target.value}))} placeholder="https://www.youtube.com/watch?v=..." /></label><p className="hint">No horário agendado, o plugin solicita abrir o link no navegador. O navegador ou SPresenter pode bloquear abertura automática; confirme que o navegador está autorizado a abrir links.</p></div>
       <div className="scheduler-section"><h3>④ vMix · Câmera e transmissão</h3><label>Função / cena do vMix<input value={scheduleDraft.vmixFunction} onChange={e => setScheduleDraft(v => ({...v,vmixFunction:e.target.value}))} placeholder="Ex.: PreviewInput,1 ou Cut" /></label><label className="checkline"><input type="checkbox" checked={scheduleDraft.startStream} onChange={e => setScheduleDraft(v => ({...v,startStream:e.target.checked}))} /> Iniciar transmissão ao vivo neste horário</label></div>
       <div className="actions"><button className="primary" disabled={!scheduleDraft.name.trim() || !scheduleDraft.date || !scheduleDraft.time} onClick={() => { postMessage({type:"save-event-schedule",schedule:{...scheduleDraft,id:scheduleDraft.id || Date.now().toString(36),enabled:true}}); setTab("dashboard"); setEditingSchedule(false); setScheduleDraft(blankSchedule()); }}>{editingSchedule ? "Salvar alterações" : "Salvar programação"}</button><button className="ghost" onClick={() => { setScheduleDraft(blankSchedule()); setEditingSchedule(false); setTab("dashboard"); }}>Cancelar</button></div>
