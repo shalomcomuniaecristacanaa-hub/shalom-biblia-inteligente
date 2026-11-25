@@ -86,7 +86,7 @@ export function App() {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
-  const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
+  const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });\n  const [grandmaTelnetPort, setGrandmaTelnetPort] = useState("30000");
   const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");
   const [grandmaCommand, setGrandmaCommand] = useState("List Group Thru 10");
   const [grandmaResponse, setGrandmaResponse] = useState("");
