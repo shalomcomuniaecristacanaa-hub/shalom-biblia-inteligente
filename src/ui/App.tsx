@@ -508,7 +508,6 @@ export function App() {
     if (typeof payload.running === "boolean") setPptRunning(payload.running);
     if (typeof payload.slide === "number") { setPptSlide(payload.slide); setPptGoto(String(payload.slide || 1)); }
     if (typeof payload.total === "number") setPptTotal(payload.total);
-    if (payload.file) setPptFileName(payload.file);
     return payload;
   };
   const refreshPowerPoint = async () => {
