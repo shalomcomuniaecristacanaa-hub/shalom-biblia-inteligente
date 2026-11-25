@@ -14,6 +14,7 @@ let connected = false;
 let loggedIn = false;
 let loginTimer = null;
 let connectWaiter = null;
+let loginSent = false;
 let pending = [];
 let lastError = "";
 
@@ -39,7 +40,7 @@ function cleanTelnet(chunk) {
   return Buffer.from(out).toString("utf8");
 }
 function closeSocket(reason = "Connection closed") {
-  connected = false; loggedIn = false; buffer = "";
+  connected = false; loggedIn = false; loginSent = false; buffer = "";
   if (loginTimer) clearTimeout(loginTimer);
   loginTimer = null;
   if (connectWaiter) { connectWaiter.reject(new Error(reason)); connectWaiter = null; }
@@ -47,30 +48,50 @@ function closeSocket(reason = "Connection closed") {
   pending.splice(0).forEach(p => p.reject(new Error(reason)));
 }
 function onData(chunk) {
-  const text = cleanTelnet(chunk);
+  // grandMA2 pode dividir uma resposta em vários pacotes. Mantemos o buffer
+  // até receber o prompt completo, removendo também sequências ANSI de terminal.
+  const text = cleanTelnet(chunk).replace(/\u001b\\[[0-?]*[ -/]*[@-~]/g, "");
   if (!text) return;
-  buffer = (buffer + text).slice(-65536);
+  buffer = (buffer + text).slice(-131072);
   const lower = buffer.toLowerCase();
-  if (!loggedIn && (/(please\s+login|login|username|user name)/i.test(buffer))) {
-    socket?.write(`Login ${config.username}${config.password ? ` ${config.password}` : ""}\n`);
-    buffer = "";
+  const promptSeen = /\\[channel\\]>\\s*$/i.test(buffer);
+
+  if (!loggedIn) {
+    if (/(login\\s+incorrect|incorrect\\s+login|wrong password|login failed|access denied)/i.test(buffer)) {
+      lastError = "GrandMA2 recusou o usuário/senha. Confira as credenciais do usuário Telnet.";
+      if (connectWaiter) { const waiter = connectWaiter; connectWaiter = null; waiter.reject(new Error(lastError)); }
+      closeSocket(lastError);
+      return;
+    }
+
+    // O console pode primeiro entrar como guest e só depois exibir o prompt.
+    // Enviamos o login uma única vez por conexão.
+    if (!loginSent && (/(please\\s+login|username|user name)/i.test(buffer) || promptSeen)) {
+      loginSent = true;
+      socket?.write(`Login ${config.username}${config.password ? ` ${config.password}` : ""}\\n`);
+      buffer = "";
+      return;
+    }
+
+    // Não considerar qualquer prompt como autenticação: o prompt de guest
+    // também existe. Exigimos a confirmação explícita do usuário autenticado.
+    const authenticatedAs = new RegExp("logged\\\\s+in\\\\s+as\\\\s+user\\\\s+['\\\"]?" + config.username.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "['\\\"]?", "i");
+    if (authenticatedAs.test(buffer) && promptSeen) {
+      loggedIn = true;
+      connected = true;
+      if (loginTimer) clearTimeout(loginTimer);
+      loginTimer = null;
+      buffer = "";
+      if (connectWaiter) { const waiter = connectWaiter; connectWaiter = null; waiter.resolve(); }
+    }
     return;
   }
-  if (/\[Channel\]>\s*$/i.test(buffer)) {
-    loggedIn = true;
-    if (loginTimer) clearTimeout(loginTimer);
-    loginTimer = null;
-    if (connectWaiter) { connectWaiter.resolve(); connectWaiter = null; buffer = ""; return; }
-    if (pending.length) {
-      const p = pending.shift();
-      const response = buffer.replace(/\[Channel\]>\s*$/i, "").trim();
-      buffer = "";
-      p.resolve(response);
-    }
-  } else if (!loggedIn && /(wrong password|login failed|access denied)/i.test(lower)) {
-    lastError = "GrandMA2 recusou o usuário/senha.";
-    if (connectWaiter) { connectWaiter.reject(new Error(lastError)); connectWaiter = null; }
-    closeSocket(lastError);
+
+  if (promptSeen && pending.length) {
+    const p = pending.shift();
+    const response = buffer.replace(/\\[Channel\\]>\\s*$/i, "").trim();
+    buffer = "";
+    p.resolve(response);
   }
 }
 function connect() {
@@ -80,31 +101,52 @@ function connect() {
     if (!config.host) return reject(new Error("Configure o IP da GrandMA2 primeiro."));
     const s = net.createConnection({ host: config.host, port: config.port });
     socket = s;
-    loginTimer = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
+    loginSent = false;
+    loginTimer = setTimeout(() => {
+      lastError = "Tempo esgotado aguardando autenticação Telnet. Confira IP, porta, usuário e senha.";
+      closeSocket(lastError);
+      reject(new Error(lastError));
+    }, 20000);
     connectWaiter = {
       resolve: () => { if (loginTimer) clearTimeout(loginTimer); loginTimer = null; connected = true; loggedIn = true; resolve(); },
       reject: error => { if (loginTimer) clearTimeout(loginTimer); loginTimer = null; reject(error); }
     };
     s.on("connect", () => { connected = true; });
     s.on("data", onData);
-    s.on("error", e => { lastError = e.message; if (loginTimer) clearTimeout(loginTimer); loginTimer = null; closeSocket(e.message); reject(e); });
-    s.on("close", () => { connected = false; loggedIn = false; });
+    s.on("error", e => {
+      lastError = e.message;
+      if (loginTimer) clearTimeout(loginTimer);
+      loginTimer = null;
+      const waiter = connectWaiter;
+      connectWaiter = null;
+      if (waiter) waiter.reject(e);
+      closeSocket(e.message);
+    });
+    s.on("close", () => {
+      connected = false;
+      loggedIn = false;
+      if (connectWaiter) {
+        const waiter = connectWaiter;
+        connectWaiter = null;
+        waiter.reject(new Error("A conexão Telnet foi encerrada antes da autenticação."));
+      }
+    });
   });
 }
 function send(command) {
   if (!connected || !loggedIn || !socket) throw new Error("Conecte e autentique na GrandMA2 primeiro.");
-  if (/[\r\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
+  if (/[\\r\\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
   return new Promise((resolve, reject) => {
     const entry = { resolve, reject };
     const timer = setTimeout(() => {
       const i = pending.indexOf(entry);
       if (i >= 0) pending.splice(i, 1);
-      reject(new Error("A GrandMA2 não retornou o prompt em 8 segundos."));
-    }, 8000);
+      reject(new Error("A GrandMA2 não devolveu o prompt após 30 segundos. O comando pode ter sido executado; confira o console antes de reenviar."));
+    }, 30000);
     entry.resolve = value => { clearTimeout(timer); resolve(value); };
     entry.reject = error => { clearTimeout(timer); reject(error); };
     pending.push(entry);
-    socket.write(command + "\n");
+    socket.write(command + "\\n");
   });
 }
 function json(res, status, body) {
