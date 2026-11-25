@@ -124,7 +124,7 @@
               } catch {
                 throw new Error("URL do YouTube inválida.");
               }
-              if (parsed.protocol !== "https:" || !/(^|\\.)youtube\\.com$|(^|\\.)youtu\\.be$/.test(parsed.hostname)) {
+              if (parsed.protocol !== "https:" || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(parsed.hostname)) {
                 throw new Error("Informe um endereço HTTPS válido do YouTube.");
               }
               spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
