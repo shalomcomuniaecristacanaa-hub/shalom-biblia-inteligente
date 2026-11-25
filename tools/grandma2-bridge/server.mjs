@@ -49,7 +49,7 @@ function connect() {
 }
 function send(command) {
   if (!connected || !socket) throw new Error("Not connected");
-  if (/[\\r\\n]/.test(command)) throw new Error("One command per request");
+  if (/[\r\n]/.test(command)) throw new Error("One command per request");
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       const i = pending.findIndex(p => p.resolve === resolve);
