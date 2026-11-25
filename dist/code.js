@@ -11,6 +11,70 @@
   let bibleWatchTimer;
   let bibleWatchConfig = { output: "0", captureLayer: 0 };
   let lastBibleSnapshot = "";
+  let scheduleWatchTimer;
+  let scheduleWatchBusy = false;
+  async function runDueSchedules() {
+    if (scheduleWatchBusy) return;
+    scheduleWatchBusy = true;
+    try {
+      const schedules = await spresenter.storage.get(EVENT_SCHEDULES_KEY) ?? [];
+      const now = Date.now();
+      let changed = false;
+      for (const schedule of schedules) {
+        if (!schedule?.enabled || schedule.executedAt || !schedule.date || !schedule.time) continue;
+        const dueAt = (/* @__PURE__ */ new Date(schedule.date + "T" + schedule.time)).getTime();
+        if (!Number.isFinite(dueAt) || dueAt > now) continue;
+        const results = schedule.stepResults ?? {};
+        const runStep = async (key, action) => {
+          if (results[key]) return;
+          const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+          try {
+            await action();
+            results[key] = { status: "success", startedAt, finishedAt: (/* @__PURE__ */ new Date()).toISOString(), error: "" };
+          } catch (error) {
+            results[key] = { status: "failed", startedAt, finishedAt: (/* @__PURE__ */ new Date()).toISOString(), error: error instanceof Error ? error.message : String(error) };
+          }
+        };
+        if (schedule.coverGuid) {
+          await runStep("spresenterMedia", () => presentLibraryBackground({ type: "present-library-background", guid: schedule.coverGuid, output: schedule.output ?? "0", backgroundLayer: Number(schedule.backgroundLayer ?? 1) }));
+        }
+        if (schedule.song) {
+          await runStep("youtube", async () => {
+            throw new Error("A execução automática do YouTube ainda não está conectada ao SPresenter/navegador.");
+          });
+        }
+        if (schedule.grandmaCommand) {
+          await runStep("grandma2", async () => {
+            throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador.");
+          });
+        }
+        if (schedule.vmixFunction || schedule.startStream) {
+          await runStep("vmix", async () => {
+            throw new Error("O envio de comandos vMix ainda não está conectado ao agendador.");
+          });
+        }
+        schedule.stepResults = results;
+        schedule.executedAt = (/* @__PURE__ */ new Date()).toISOString();
+        changed = true;
+      }
+      if (changed) {
+        await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "O agendador processou um ou mais eventos. Confira o resultado de cada etapa." });
+      }
+    } catch (error) {
+      console.error(PLUGIN_TAG, "Falha no agendador:", error);
+    } finally {
+      scheduleWatchBusy = false;
+    }
+  }
+  function startScheduleWatch() {
+    if (scheduleWatchTimer) return;
+    scheduleWatchTimer = setInterval(() => {
+      void runDueSchedules();
+    }, 1e3);
+    void runDueSchedules();
+  }
   function safeText(value) {
     return String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   }
@@ -338,6 +402,7 @@
       if (msg.type === "init") {
         await sendState();
         startBibleWatch();
+        startScheduleWatch();
       } else if (msg.type === "watch-bible") {
         bibleWatchConfig = { output: String(msg.output ?? "0"), captureLayer: Number(msg.captureLayer ?? 0) };
         lastBibleSnapshot = "";
