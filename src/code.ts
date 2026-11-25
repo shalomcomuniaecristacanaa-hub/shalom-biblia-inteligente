@@ -13,6 +13,64 @@ const previousBackgrounds = new Map<string, unknown>();
 let bibleWatchTimer: ReturnType<typeof setInterval> | undefined;
 let bibleWatchConfig = { output: "0", captureLayer: 0 };
 let lastBibleSnapshot = "";
+let scheduleWatchTimer: ReturnType<typeof setInterval> | undefined;
+let scheduleWatchBusy = false;
+
+async function runDueSchedules() {
+  if (scheduleWatchBusy) return;
+  scheduleWatchBusy = true;
+  try {
+    const schedules = await spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY) ?? [];
+    const now = Date.now();
+    let changed = false;
+    for (const schedule of schedules) {
+      if (!schedule?.enabled || schedule.executedAt || !schedule.date || !schedule.time) continue;
+      const dueAt = new Date(schedule.date + "T" + schedule.time).getTime();
+      if (!Number.isFinite(dueAt) || dueAt > now) continue;
+      const results: Record<string, any> = schedule.stepResults ?? {};
+      const runStep = async (key: string, action: () => Promise<unknown>) => {
+        if (results[key]) return;
+        const startedAt = new Date().toISOString();
+        try {
+          await action();
+          results[key] = { status: "success", startedAt, finishedAt: new Date().toISOString(), error: "" };
+        } catch (error) {
+          results[key] = { status: "failed", startedAt, finishedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) };
+        }
+      };
+      if (schedule.coverGuid) {
+        await runStep("spresenterMedia", () => presentLibraryBackground({ type: "present-library-background", guid: schedule.coverGuid, output: schedule.output ?? "0", backgroundLayer: Number(schedule.backgroundLayer ?? 1) }));
+      }
+      if (schedule.song) {
+        await runStep("youtube", async () => { throw new Error("A execução automática do YouTube ainda não está conectada ao SPresenter/navegador."); });
+      }
+      if (schedule.grandmaCommand) {
+        await runStep("grandma2", async () => { throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador."); });
+      }
+      if (schedule.vmixFunction || schedule.startStream) {
+        await runStep("vmix", async () => { throw new Error("O envio de comandos vMix ainda não está conectado ao agendador."); });
+      }
+      schedule.stepResults = results;
+      schedule.executedAt = new Date().toISOString();
+      changed = true;
+    }
+    if (changed) {
+      await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+      await sendState();
+      spresenter.ui.postMessage({ type: "notice", message: "O agendador processou um ou mais eventos. Confira o resultado de cada etapa." });
+    }
+  } catch (error) {
+    console.error(PLUGIN_TAG, "Falha no agendador:", error);
+  } finally {
+    scheduleWatchBusy = false;
+  }
+}
+function startScheduleWatch() {
+  if (scheduleWatchTimer) return;
+  scheduleWatchTimer = setInterval(() => { void runDueSchedules(); }, 1000);
+  void runDueSchedules();
+}
+
 
 function safeText(value: unknown): string {
   return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -359,7 +417,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
   const msg = raw as UiMessage;
   if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
   try {
-    if (msg.type === "init") { await sendState(); startBibleWatch(); }
+    if (msg.type === "init") { await sendState(); startBibleWatch(); startScheduleWatch(); }
     else if (msg.type === "watch-bible") {
       bibleWatchConfig = { output: String(msg.output ?? "0"), captureLayer: Number(msg.captureLayer ?? 0) };
       lastBibleSnapshot = "";
