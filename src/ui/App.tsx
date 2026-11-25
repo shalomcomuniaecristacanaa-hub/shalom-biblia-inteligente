@@ -550,6 +550,9 @@ export function App() {
       setPptConnected(false);
     } finally { setPptBusy(false); }
   };
+  useEffect(() => {
+    if (tab === "live") void refreshPowerPoint();
+  }, [tab]);
 
   function save() {
     if (!verse.reference.trim() || !verse.text.trim()) return;
@@ -760,10 +763,10 @@ export function App() {
           </div>
         </div>
         <div className="scheduler-note" style={{marginTop:12}}>
-          <strong>Primeira configuração no Windows</strong>
-          <ol><li>Instale o Microsoft PowerPoint desktop no computador que opera o SPresenter.</li><li>Abra a pasta do projeto e execute <code>scripts/PowerPoint-Bridge/INICIAR.bat</code> (ou baixe os dois arquivos da pasta PowerPoint-Bridge e coloque-os juntos).</li><li>Mantenha a janela do auxiliar aberta durante o culto e clique em “Testar / atualizar status”.</li><li>Configure o vMix para capturar a tela desse computador por NDI ou captura de desktop em rede.</li></ol>
+          <strong>Configuração automática no Windows (uma única vez)</strong>
+          <ol><li>Instale o Microsoft PowerPoint desktop no computador que opera o SPresenter.</li><li>Baixe os arquivos desta pasta e mantenha todos juntos: <a href="https://github.com/shalomcomuniaecristacanaa-hub/shalom-biblia-inteligente/tree/main/scripts/PowerPoint-Bridge" target="_blank" rel="noreferrer">Auxiliar PowerPoint Shalom</a>.</li><li>Execute <code>CONFIGURAR-INICIO-AUTOMATICO.bat</code> uma única vez. Ele registra o auxiliar na inicialização do Windows e já o inicia nesta sessão.</li><li>Depois disso, ao entrar no Windows, o auxiliar inicia sozinho. Ao abrir Culto ao Vivo, o plugin verifica a conexão; basta selecionar o PowerPoint.</li><li>Configure o vMix para capturar a tela desse computador por NDI ou captura de desktop em rede.</li></ol>
         </div>
-        <p className="hint">O auxiliar escuta somente em 127.0.0.1:17843 e precisa rodar no mesmo computador em que o painel do SPresenter está aberto. O vMix pode continuar em outro computador. O comportamento de mídias incorporadas também depende de os arquivos vinculados estarem acessíveis e de codecs/fontes instalados no Windows.</p>
+        <p className="hint">O auxiliar escuta somente em 127.0.0.1:17843 e roda no mesmo computador em que o painel do SPresenter está aberto. Depois de configurar a inicialização automática, não é necessário abrir o INICIAR.bat a cada culto. O vMix pode continuar em outro computador. O comportamento de mídias incorporadas também depende de os arquivos vinculados estarem acessíveis e de codecs/fontes instalados no Windows.</p>
       </section>
       <section className="card livebar">
         <small>SAÍDA E CAMADAS DO TELÃO</small>
