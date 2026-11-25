@@ -383,7 +383,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
     }
     else if (msg.type === "save-event-schedule") {
       const schedule = msg.schedule;
-      if (!schedule?.id || !schedule.name?.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(schedule.date) || !/^\\d{2}:\\d{2}$/.test(schedule.time)) throw new Error("Informe nome, data e horário válidos para o evento.");
+      if (!schedule?.id || !schedule.name?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(schedule.date) || !/^\d{2}:\d{2}$/.test(schedule.time)) throw new Error("Informe nome, data e horário válidos para o evento.");
       const schedules = await spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY) ?? [];
       const index = schedules.findIndex((item: any) => item.id === schedule.id);
       if (index >= 0) schedules[index] = schedule; else schedules.push(schedule);
@@ -396,7 +396,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
         const ip = String(value ?? "").trim();
         if (!ip) return "";
         const parts = ip.split(".");
-        if (parts.length !== 4 || parts.some(part => !/^\\d{1,3}$/.test(part) || Number(part) > 255)) {
+        if (parts.length !== 4 || parts.some(part => !/^\d{1,3}$/.test(part) || Number(part) > 255)) {
           throw new Error("Informe um IPv4 válido para " + label + " (ex.: 192.168.1.50).");
         }
         return ip;
