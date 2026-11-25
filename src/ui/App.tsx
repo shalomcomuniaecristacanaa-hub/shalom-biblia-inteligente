@@ -125,6 +125,35 @@ export function App() {
     } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
   };
 
+  const [grandmaCatalog, setGrandmaCatalog] = useState<{name:string;response:string}[]>([]);
+  const [grandmaSequenceNumber, setGrandmaSequenceNumber] = useState("90");
+  const [grandmaSceneName, setGrandmaSceneName] = useState("Nova cena Shalom");
+  const readGrandmaCatalog = async () => {
+    const queries = [{name:"Grupos",command:"List Group Thru 10"},{name:"Presets",command:"List Preset"},{name:"Sequências / cenas",command:"List Sequence"},{name:"Macros",command:"List Macro"}];
+    const results: {name:string;response:string}[] = [];
+    try {
+      setGrandmaBridgeStatus("Lendo dados do show...");
+      for (const item of queries) {
+        const result = await bridgeRequest("/command", {command:item.command});
+        results.push({name:item.name,response:String(result.response || "(sem conteúdo retornado)")});
+        setGrandmaCatalog([...results]);
+      }
+      setGrandmaBridgeStatus("Leitura concluída. Confira os resultados.");
+    } catch (e) { setGrandmaCatalog(results); setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+  const createGrandmaScene = async () => {
+    const n = Number(grandmaSequenceNumber);
+    if (!Number.isInteger(n) || n < 1 || n > 9999 || !grandmaSceneName.trim()) { setGrandmaBridgeStatus("Informe número e nome válidos."); return; }
+    if (!window.confirm("Atenção: isso grava os valores ATUAIS do Programmer como Cue 1 de uma nova Sequence. Confirme que os aparelhos e valores estão preparados. Continuar?")) return;
+    try {
+      await bridgeRequest("/command", {command:"Store Cue 1 Sequence " + n});
+      const label = grandmaSceneName.replace(/["\\\\]/g, "");
+      const result = await bridgeRequest("/command", {command:'Label Sequence ' + n + ' "' + label + '"'});
+      setGrandmaResponse(String(result.response || "Comandos de gravação enviados."));
+      setGrandmaBridgeStatus("Gravação enviada. Confirme a Sequence " + n + " na mesa.");
+    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+
   const [lightingGroups, setLightingGroups] = useState<LightingGroup[]>(defaultLightingGroups());
   const [lightingScenes, setLightingScenes] = useState<LightingScene[]>([]);
   const [lightingName, setLightingName] = useState("Nova cena");
@@ -567,7 +596,9 @@ export function App() {
         </label>
         <button className="ghost" onClick={sendGrandmaCommand} disabled={!grandmaCommand.trim()}>Enviar comando</button>
         {grandmaResponse && <pre className="importbox" style={{whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto"}}>{grandmaResponse}</pre>}
-        <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>\n        <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" onClick={readGrandmaCatalog}>↻ Ler grupos, presets, cenas e macros</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>\n        <div className="scheduler-section"><h3>Gravar uma nova cena na GrandMA2</h3><p className="hint">Primeiro prepare os aparelhos e valores desejados no Programmer da mesa. O plugin grava esses valores como Cue 1 de uma nova Sequence e atribui o nome informado.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><button className="primary" onClick={createGrandmaScene}>Gravar cena na GrandMA2</button></div>
+        <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
+        <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta os objetos do show atualmente carregado.</p><button className="ghost" onClick={readGrandmaCatalog}>↻ Ler grupos, presets, cenas e macros</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
+        <div className="scheduler-section"><h3>Gravar nova cena</h3><p className="hint">Prepare primeiro os aparelhos e valores desejados no Programmer da mesa. O plugin grava esses valores como Cue 1 de uma nova Sequence e define o nome.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><button className="primary" onClick={createGrandmaScene}>Gravar cena na GrandMA2</button></div>\n        <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" onClick={readGrandmaCatalog}>↻ Ler grupos, presets, cenas e macros</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>\n        <div className="scheduler-section"><h3>Gravar uma nova cena na GrandMA2</h3><p className="hint">Primeiro prepare os aparelhos e valores desejados no Programmer da mesa. O plugin grava esses valores como Cue 1 de uma nova Sequence e atribui o nome informado.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><button className="primary" onClick={createGrandmaScene}>Gravar cena na GrandMA2</button></div>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
