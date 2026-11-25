@@ -4,6 +4,7 @@
   const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
   const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
   const CONNECTION_SETTINGS_KEY = "shalom.connection-settings.v1";
+  const LIGHTING_SCENES_KEY = "shalom.lighting-scenes.v1";
   const PLUGIN_TAG = "[Shalom Bíblia]";
   const prepared = /* @__PURE__ */ new Set();
   const previousBackgrounds = /* @__PURE__ */ new Map();
@@ -32,15 +33,16 @@
     return await spresenter.storage.get(STORE_KEY) ?? [];
   }
   async function sendState() {
-    const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings] = await Promise.all([
+    const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings, lightingScenes] = await Promise.all([
       getVerses(),
       spresenter.outputs.list(),
       spresenter.layers.list(),
       spresenter.storage.get(GROUP_BACKGROUNDS_KEY),
       spresenter.storage.get(EVENT_SCHEDULES_KEY),
-      spresenter.storage.get(CONNECTION_SETTINGS_KEY)
+      spresenter.storage.get(CONNECTION_SETTINGS_KEY),
+      spresenter.storage.get(LIGHTING_SCENES_KEY)
     ]);
-    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" } });
+    spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [] });
   }
   function stagePresentation(title, elementId) {
     return {
@@ -340,6 +342,21 @@
         bibleWatchConfig = { output: String(msg.output ?? "0"), captureLayer: Number(msg.captureLayer ?? 0) };
         lastBibleSnapshot = "";
         startBibleWatch();
+      } else if (msg.type === "save-lighting-scene") {
+        const scene = msg.scene;
+        if (!scene?.id || !String(scene.name ?? "").trim() || !Array.isArray(scene.groups) || !scene.groups.length) throw new Error("Informe o nome da cena e configure pelo menos um grupo.");
+        const scenes = await spresenter.storage.get(LIGHTING_SCENES_KEY) ?? [];
+        const index = scenes.findIndex((item) => item.id === scene.id);
+        if (index >= 0) scenes[index] = scene;
+        else scenes.unshift(scene);
+        await spresenter.storage.set(LIGHTING_SCENES_KEY, scenes);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Cena salva na biblioteca do Shalom. Ainda não foi enviada à GrandMA2." });
+      } else if (msg.type === "delete-lighting-scene") {
+        const scenes = await spresenter.storage.get(LIGHTING_SCENES_KEY) ?? [];
+        await spresenter.storage.set(LIGHTING_SCENES_KEY, scenes.filter((item) => item.id !== msg.id));
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Cena removida da biblioteca do Shalom." });
       } else if (msg.type === "save-event-schedule") {
         const schedule = msg.schedule;
         if (!schedule?.id || !schedule.name?.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(schedule.date) || !/^\\d{2}:\\d{2}$/.test(schedule.time)) throw new Error("Informe nome, data e horário válidos para o evento.");
