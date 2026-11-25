@@ -37,9 +37,9 @@ function Get-Status {
 }
 function Ensure-PowerPoint {
   if ($null -eq $powerPoint) {
-    try { $powerPoint = New-Object -ComObject PowerPoint.Application }
+    try { $script:powerPoint = New-Object -ComObject PowerPoint.Application }
     catch { throw "Microsoft PowerPoint nao encontrado. Instale o PowerPoint desktop e tente novamente. Detalhe: $($_.Exception.Message)" }
-    $powerPoint.Visible = -1
+    $script:powerPoint.Visible = -1
   }
 }
 function Ensure-SlideShow {
@@ -91,7 +91,7 @@ try {
         $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
         try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
         $data = @{}
-        if ($body) { $data = $body | ConvertFrom-Json -AsHashtable }
+        if ($body) { $data = $body | ConvertFrom-Json }
         switch ($route) {
           "/open" {
             $path = [string]$data.path
