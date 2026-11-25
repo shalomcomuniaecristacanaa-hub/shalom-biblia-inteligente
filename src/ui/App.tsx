@@ -87,6 +87,41 @@ export function App() {
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
   const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
+  const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");
+  const [grandmaCommand, setGrandmaCommand] = useState("List Group Thru 10");
+  const [grandmaResponse, setGrandmaResponse] = useState("");
+  const bridgeRequest = async (path: string, body?: unknown) => {
+    const response = await fetch("http://127.0.0.1:17842" + path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha na ponte local");
+    return result;
+  };
+  const configureGrandmaBridge = async () => {
+    try {
+      if (!connectionSettings.grandmaIp.trim() || !grandmaTelnet.password) throw new Error("Informe o IP da GrandMA2 e a senha Telnet.");
+      await bridgeRequest("/configure", { host: connectionSettings.grandmaIp.trim(), port: 30000, username: grandmaTelnet.username.trim() || "administrator", password: grandmaTelnet.password });
+      setGrandmaBridgeStatus("Credenciais configuradas na ponte local (em memória).");
+      setNotice("Configuração Telnet enviada à ponte local.");
+    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+  const testGrandmaBridge = async () => {
+    try {
+      const result = await bridgeRequest("/connect", {});
+      setGrandmaBridgeStatus(result.loggedIn ? "Conectada e autenticada" : "Socket conectado; autenticação ainda não confirmada");
+    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+  const sendGrandmaCommand = async () => {
+    try {
+      const result = await bridgeRequest("/command", { command: grandmaCommand });
+      setGrandmaResponse(String(result.response || ""));
+      setGrandmaBridgeStatus("Comando enviado; resposta recebida.");
+    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+
   const [lightingGroups, setLightingGroups] = useState<LightingGroup[]>(defaultLightingGroups());
   const [lightingScenes, setLightingScenes] = useState<LightingScene[]>([]);
   const [lightingName, setLightingName] = useState("Nova cena");
@@ -515,14 +550,21 @@ export function App() {
       <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
       <details className="importbox" style={{marginTop:14}}>
         <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
-        <p className="hint">Informe o usuário e a senha do Telnet quando estiver perto do computador. Estes campos são temporários nesta tela: ainda não são enviados nem salvos, pois a ponte local do Windows será implementada na próxima etapa.</p>
+        <p className="hint">A ponte local precisa estar iniciada no computador que executa o SPresenter. A senha é enviada somente à ponte e fica em memória enquanto o processo estiver rodando.</p>
         <label>Usuário Telnet
           <input autoComplete="username" value={grandmaTelnet.username} onChange={e => setGrandmaTelnet(v => ({...v, username:e.target.value}))} placeholder="Usuário dedicado da GrandMA2" />
         </label>
         <label>Senha Telnet
           <input type="password" autoComplete="current-password" value={grandmaTelnet.password} onChange={e => setGrandmaTelnet(v => ({...v, password:e.target.value}))} placeholder="Senha do usuário Telnet" />
         </label>
-        <p className="hint">Por segurança, não compartilhe a senha pelo chat. Não há botão de salvar ainda; a credencial será configurada diretamente no serviço local, sem ficar no armazenamento do plugin.</p>
+        <div className="actions"><button className="primary" onClick={configureGrandmaBridge}>Configurar ponte local</button><button className="ghost" onClick={testGrandmaBridge}>Testar conexão</button></div>
+        <p className="hint">Status: {grandmaBridgeStatus}</p>
+        <label>Comando GrandMA2 (teste)
+          <input value={grandmaCommand} onChange={e => setGrandmaCommand(e.target.value)} placeholder="List Group Thru 10" />
+        </label>
+        <button className="ghost" onClick={sendGrandmaCommand} disabled={!grandmaCommand.trim()}>Enviar comando</button>
+        {grandmaResponse && <pre className="importbox" style={{whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto"}}>{grandmaResponse}</pre>}
+        <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
