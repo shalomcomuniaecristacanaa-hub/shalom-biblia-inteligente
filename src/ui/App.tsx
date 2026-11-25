@@ -86,6 +86,7 @@ export function App() {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
+  const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
   const [lightingGroups, setLightingGroups] = useState<LightingGroup[]>(defaultLightingGroups());
   const [lightingScenes, setLightingScenes] = useState<LightingScene[]>([]);
   const [lightingName, setLightingName] = useState("Nova cena");
@@ -485,6 +486,17 @@ export function App() {
         <input value={connectionSettings.vmixIp} onChange={e => setConnectionSettings(v => ({...v, vmixIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.60" inputMode="decimal" />
       </label>
       <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
+      <details className="importbox" style={{marginTop:14}}>
+        <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
+        <p className="hint">Informe o usuário e a senha do Telnet quando estiver perto do computador. Estes campos são temporários nesta tela: ainda não são enviados nem salvos, pois a ponte local do Windows será implementada na próxima etapa.</p>
+        <label>Usuário Telnet
+          <input autoComplete="username" value={grandmaTelnet.username} onChange={e => setGrandmaTelnet(v => ({...v, username:e.target.value}))} placeholder="Usuário dedicado da GrandMA2" />
+        </label>
+        <label>Senha Telnet
+          <input type="password" autoComplete="current-password" value={grandmaTelnet.password} onChange={e => setGrandmaTelnet(v => ({...v, password:e.target.value}))} placeholder="Senha do usuário Telnet" />
+        </label>
+        <p className="hint">Por segurança, não compartilhe a senha pelo chat. Não há botão de salvar ainda; a credencial será configurada diretamente no serviço local, sem ficar no armazenamento do plugin.</p>
+      </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
     <section className="card">
