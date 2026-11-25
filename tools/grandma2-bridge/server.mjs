@@ -36,7 +36,7 @@ function connect() {
         s.write(`Login ${config.username} ${config.password}\n`);
         loggedIn = true;
       }
-      const prompt = /\\[Channel\\]>/i.test(buffer);
+      const prompt = /\[Channel\]>/i.test(buffer);
       if (prompt && pending.length) {
         const p = pending.shift();
         const response = buffer; buffer = "";
