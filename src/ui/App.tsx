@@ -360,6 +360,7 @@ export function App() {
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
+      if (m.type === "managed-device-test-result") { setNotice((m.online ? "Equipamento respondeu" : "Falha no teste") + ": " + (m.name || "dispositivo") + (m.error ? " — " + m.error : " — HTTP " + m.statusCode)); }
       if (m.type === "vmix-test-result") { setVmixStatus(m.success ? m.message : (m.message || "Falha no teste")); }
       if (m.type === "vmix-action-result") { setVmixStatus(m.message); }
       if (m.type === "vmix-status-result") { setVmixStatus(m.message); }
