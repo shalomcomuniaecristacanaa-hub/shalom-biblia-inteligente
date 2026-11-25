@@ -71,7 +71,13 @@ async function runDueSchedules() {
         await runStep("grandma2", async () => { throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador."); });
       }
       if (schedule.vmixFunction || schedule.startStream) {
-        await runStep("vmix", async () => {\n          if (schedule.vmixFunction) {\n            const parts = String(schedule.vmixFunction).split(",").map((part: string) => part.trim());\n            await callVmix(parts[0], parts[1]);\n          }\n          if (schedule.startStream) await callVmix("StartStreaming");\n        });
+        await runStep("vmix", async () => {
+          if (schedule.vmixFunction) {
+            const parts = String(schedule.vmixFunction).split(",").map((part: string) => part.trim());
+            await callVmix(parts[0], parts[1]);
+          }
+          if (schedule.startStream) await callVmix("StartStreaming");
+        });
       }
       schedule.stepResults = results;
       schedule.executedAt = new Date().toISOString();
