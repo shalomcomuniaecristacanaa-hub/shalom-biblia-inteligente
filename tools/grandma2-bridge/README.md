@@ -40,7 +40,7 @@ Para executar uma cena já existente, use o comando apropriado ao seu show, por 
 - A senha fica apenas na memória do processo; “Desconectar” ou fechar a janela da ponte limpa a sessão/credencial.
 - Não salve credenciais em arquivos ou commits.
 - Telnet não é criptografado. Use uma rede de controle confiável.
-- O serviço remove comandos de negociação Telnet e aguarda o prompt `[Channel]>`, mas o diálogo pode variar entre versões e configurações. A conexão precisa ser testada na mesa real.
+- O serviço remove comandos de negociação Telnet e códigos ANSI, acompanha respostas divididas em vários pacotes e aguarda o prompt `[Channel]>`. A autenticação só é considerada concluída quando a mesa confirma explicitamente o usuário configurado. Consultas aguardam até 30 segundos pelo prompt; se houver timeout, confira o console antes de reenviar, pois o comando pode ter sido executado.
 - `List` exibe dados no feedback da linha de comando. Nem todos os parâmetros internos de um preset/cue são devolvidos como texto por Telnet. Exportação XML/CSV e transferência de arquivos precisam de um fluxo separado.
 - A gravação de cenas altera o show. Use número livre, confirme o Programmer e valide na mesa; não use em operação ao vivo sem teste.
 - Ainda não foi possível executar teste de rede contra a GrandMA2 física/onPC nesta etapa.
