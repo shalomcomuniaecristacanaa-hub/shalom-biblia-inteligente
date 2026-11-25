@@ -502,8 +502,8 @@ export function App() {
       <div className="saved-schedules"><h3>Programações cadastradas</h3>{eventSchedules.length ? eventSchedules.map(event=><div className="saved-schedule" key={event.id}><div><strong>{event.name}</strong><small>{event.date.split("-").reverse().join("/")} às {event.time}</small></div><div className="actions"><button className="ghost" onClick={() => {setScheduleDraft(event);setEditingSchedule(true);}}>Editar</button><button className="danger" onClick={() => postMessage({type:"delete-event-schedule",id:event.id})}>Excluir</button></div></div>) : <p className="hint">Nenhuma programação salva ainda.</p>}</div>
     </section>}
     {tab === "lighting" && <section className="card">
-      <small>ESTÚDIO DE ILUMINAÇÃO · MODO DE TESTE</small><h2>Simulador local de cenas</h2>
-      <p className="hint">Este modo altera apenas a prévia do plugin. Não envia comandos à GrandMA2 nem controla luminárias físicas.</p>
+      <div className="lighting-studio-heading"><small>ESTÚDIO DE ILUMINAÇÃO · SIMULAÇÃO REALISTA</small><h2>Crie cenas para o palco</h2></div>
+      <p className="hint">Prévia local segura: sem aparelhos conectados e sem envio de comandos à GrandMA2. Configure grupos, cores, movimentos e salve suas cenas para testar.</p>
       <label>Nome da cena<input value={lightingName} onChange={e => setLightingName(e.target.value)} /></label>
       <label>Preset<select value={lightingPreset} onChange={e => { const id=e.target.value; setLightingPreset(id); const preset=lightingPresets.find(p=>p.id===id); if (!preset) return; setLightingGroups(groups=>groups.map(g=>({...g,color:preset.color,movement:preset.movement,colorBehavior:preset.colorBehavior,strobe:(preset as any).strobe ?? 0}))); }}><option value="custom">Personalizado</option>{lightingPresets.map(p=><option key={p.id} value={p.id}>{p.name} — {p.description}</option>)}</select></label>
       <label>Transição (segundos)<input type="number" min="0" max="60" value={lightingTransition} onChange={e=>setLightingTransition(Math.max(0,Math.min(60,Number(e.target.value)||0)))}/></label>
