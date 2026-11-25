@@ -69,6 +69,14 @@ export function App() {
   const [songSearchStatus, setSongSearchStatus] = useState("");
   const [songSections, setSongSections] = useState<Record<string, any[]>>({});
   const [messageText, setMessageText] = useState("");
+  const [pptFileName, setPptFileName] = useState("");
+  const [pptStatus, setPptStatus] = useState("Auxiliar do PowerPoint não conectado");
+  const [pptConnected, setPptConnected] = useState(false);
+  const [pptRunning, setPptRunning] = useState(false);
+  const [pptSlide, setPptSlide] = useState(0);
+  const [pptTotal, setPptTotal] = useState(0);
+  const [pptGoto, setPptGoto] = useState("1");
+  const [pptBusy, setPptBusy] = useState(false);
   const [searchingSongs, setSearchingSongs] = useState(false);
   const [libraryAssets, setLibraryAssets] = useState<any[]>([]);
   const [selectedBackgroundGuid, setSelectedBackgroundGuid] = useState("");
@@ -488,6 +496,62 @@ export function App() {
     (v.reference + " " + v.text + " " + v.theme).toLowerCase().includes(query.toLowerCase())
   ), [verses, group, query]);
 
+  const powerpointRequest = async (route: string, body?: unknown) => {
+    const response = await fetch("http://127.0.0.1:17843" + route, {
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Falha na comunicação com o auxiliar PowerPoint.");
+    setPptConnected(true);
+    if (typeof payload.running === "boolean") setPptRunning(payload.running);
+    if (typeof payload.slide === "number") { setPptSlide(payload.slide); setPptGoto(String(payload.slide || 1)); }
+    if (typeof payload.total === "number") setPptTotal(payload.total);
+    if (payload.file) setPptFileName(payload.file);
+    return payload;
+  };
+  const refreshPowerPoint = async () => {
+    try {
+      const status = await powerpointRequest("/status");
+      setPptStatus(status.running ? "Apresentação em execução" : status.presentationOpen ? "Arquivo aberto; apresentação ainda não iniciada" : "Auxiliar conectado; aguardando arquivo");
+    } catch (error) {
+      setPptConnected(false); setPptRunning(false);
+      setPptStatus(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const uploadPowerPoint = async (file?: File) => {
+    if (!file) return;
+    if (!/\\.(ppt|pptx)$/i.test(file.name)) { setPptStatus("Selecione um arquivo .ppt ou .pptx."); return; }
+    if (file.size > 200 * 1024 * 1024) { setPptStatus("O arquivo excede o limite de 200 MB."); return; }
+    setPptBusy(true); setPptStatus("Enviando apresentação original ao computador...");
+    try {
+      const response = await fetch("http://127.0.0.1:17843/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
+        body: file
+      });
+      const uploaded = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(uploaded.error || "Não foi possível enviar o arquivo ao auxiliar.");
+      await powerpointRequest("/open", { path: uploaded.path });
+      setPptFileName(file.name);
+      setPptStatus("Apresentação original aberta no Microsoft PowerPoint. Clique em Iniciar.");
+    } catch (error) {
+      setPptConnected(false);
+      setPptStatus(error instanceof Error ? error.message : String(error));
+    } finally { setPptBusy(false); }
+  };
+  const runPowerPointAction = async (route: string, body?: unknown) => {
+    setPptBusy(true);
+    try {
+      const result = await powerpointRequest(route, body);
+      setPptStatus(result.running ? "Apresentação em execução" : result.presentationOpen ? "Arquivo aberto no PowerPoint" : "Apresentação encerrada");
+    } catch (error) {
+      setPptStatus(error instanceof Error ? error.message : String(error));
+      setPptConnected(false);
+    } finally { setPptBusy(false); }
+  };
+
   function save() {
     if (!verse.reference.trim() || !verse.text.trim()) return;
     postMessage({ type: "save-verse", verse: { ...verse, id: verse.id || Date.now().toString(36), group: verse.group.trim() || "Geral" } });
@@ -667,10 +731,40 @@ export function App() {
         <button className="ghost" style={{marginLeft:8}} onClick={() => postMessage({ type: "clear-content", output, contentLayer })}>Retirar mensagem</button>
       </section>
       <section className="card">
-        <small>APRESENTAÇÕES MULTIMÍDIA</small><h2>PowerPoint com vídeos</h2>
-        <p className="hint">O SDK público atual não documenta importação nem controle de arquivos .ppt/.pptx pelo plugin. Para preservar vídeos, transições e avanço de slides, abra a apresentação no recurso nativo de apresentações do SPresenter após importá-la por lá.</p>
-        <button className="ghost" onClick={() => postMessage({ type: "open-media" })}>Abrir painel de mídia do SPresenter</button>
-        <p className="hint">Não vou simular um carregamento de PowerPoint que não consiga reproduzir os vídeos corretamente.</p>
+        <small>APRESENTAÇÕES MULTIMÍDIA · POWERPOINT NATIVO</small><h2>Anúncios e apresentações</h2>
+        <p className="hint">Selecione o arquivo original .ppt ou .pptx. O auxiliar abre o Microsoft PowerPoint instalado neste computador; vídeos, animações, transições e efeitos são reproduzidos pelo próprio PowerPoint, sem converter os slides em imagens.</p>
+        <div className="importbox">
+          <strong>1. Arquivo da apresentação</strong>
+          <label>Carregar PowerPoint (.ppt / .pptx)<input type="file" accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled={pptBusy} onChange={e => { void uploadPowerPoint(e.target.files?.[0]); e.currentTarget.value = ""; }} /></label>
+          {pptFileName && <p className="hint">Arquivo: {pptFileName}</p>}
+          <p className="hint">Limite de envio: 200 MB. O arquivo é copiado para uma pasta temporária do Windows e o original não é achatado nem convertido.</p>
+        </div>
+        <div className="importbox" style={{marginTop:12}}>
+          <div className="verse-head"><div><strong>2. Controle da apresentação</strong><small>{pptStatus}</small></div><span className={pptConnected ? "tag" : "hint"}>{pptConnected ? "AUXILIAR CONECTADO" : "AGUARDANDO CONEXÃO"}</span></div>
+          <div className="actions">
+            <button className="ghost" disabled={pptBusy} onClick={refreshPowerPoint}>Testar / atualizar status</button>
+            <button className="primary" disabled={pptBusy || !pptConnected || !pptFileName} onClick={() => void runPowerPointAction("/play")}>▶ Iniciar apresentação</button>
+          </div>
+          <div className="actions" style={{marginTop:10}}>
+            <button className="ghost" disabled={pptBusy || !pptRunning} onClick={() => void runPowerPointAction("/previous")}>← Slide anterior</button>
+            <button className="primary" disabled={pptBusy || !pptRunning} onClick={() => void runPowerPointAction("/next")}>Próximo slide →</button>
+            <button className="ghost" disabled={pptBusy || !pptRunning} onClick={() => void runPowerPointAction("/black")}>Tela preta / voltar</button>
+          </div>
+          <div className="twocol" style={{marginTop:10}}>
+            <label>Ir para o slide<input type="number" min="1" max={pptTotal || undefined} value={pptGoto} onChange={e => setPptGoto(e.target.value)} /></label>
+            <div style={{display:"flex",alignItems:"end"}}><button className="ghost wide" disabled={pptBusy || !pptRunning || !pptGoto || Number(pptGoto)<1 || Number(pptGoto)>pptTotal} onClick={() => void runPowerPointAction("/goto",{slide:Number(pptGoto)})}>Ir para slide</button></div>
+          </div>
+          <p className="hint">Slide {pptSlide || "—"} de {pptTotal || "—"}</p>
+          <div className="actions">
+            <button className="danger" disabled={pptBusy || !pptConnected} onClick={() => void runPowerPointAction("/end")}>Encerrar apresentação</button>
+            <button className="ghost" disabled={pptBusy || !pptConnected} onClick={() => void runPowerPointAction("/close")}>Fechar arquivo</button>
+          </div>
+        </div>
+        <div className="scheduler-note" style={{marginTop:12}}>
+          <strong>Primeira configuração no Windows</strong>
+          <ol><li>Instale o Microsoft PowerPoint desktop no computador que opera o SPresenter.</li><li>Abra a pasta do projeto e execute <code>scripts/PowerPoint-Bridge/INICIAR.bat</code> (ou baixe os dois arquivos da pasta PowerPoint-Bridge e coloque-os juntos).</li><li>Mantenha a janela do auxiliar aberta durante o culto e clique em “Testar / atualizar status”.</li><li>Configure o vMix para capturar a tela desse computador por NDI ou captura de desktop em rede.</li></ol>
+        </div>
+        <p className="hint">O auxiliar escuta somente em 127.0.0.1:17843 e precisa rodar no mesmo computador em que o painel do SPresenter está aberto. O vMix pode continuar em outro computador. O comportamento de mídias incorporadas também depende de os arquivos vinculados estarem acessíveis e de codecs/fontes instalados no Windows.</p>
       </section>
       <section className="card livebar">
         <small>SAÍDA E CAMADAS DO TELÃO</small>
