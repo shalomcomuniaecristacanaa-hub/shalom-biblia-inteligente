@@ -56,7 +56,7 @@ function onData(chunk) {
     buffer = "";
     return;
   }
-  if (/\[Channel\]>/i.test(buffer)) {
+  if (/\[Channel\]>\s*$/i.test(buffer)) {
     loggedIn = true;
     if (loginTimer) clearTimeout(loginTimer);
     loginTimer = null;
@@ -80,14 +80,14 @@ function connect() {
     if (!config.host || !config.password) return reject(new Error("Configure IP e senha primeiro."));
     const s = net.createConnection({ host: config.host, port: config.port });
     socket = s;
-    const timeout = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
+    loginTimer = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
     connectWaiter = {
       resolve: () => { clearTimeout(timeout); connected = true; loggedIn = true; resolve(); },
       reject: error => { clearTimeout(timeout); reject(error); }
     };
     s.on("connect", () => { connected = true; });
     s.on("data", onData);
-    s.on("error", e => { lastError = e.message; clearTimeout(timeout); closeSocket(e.message); reject(e); });
+    s.on("error", e => { lastError = e.message; if (loginTimer) clearTimeout(loginTimer); loginTimer = null; closeSocket(e.message); reject(e); });
     s.on("close", () => { connected = false; loggedIn = false; });
   });
 }
