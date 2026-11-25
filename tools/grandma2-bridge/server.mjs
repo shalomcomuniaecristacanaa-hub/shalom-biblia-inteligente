@@ -108,7 +108,7 @@ function send(command) {
   });
 }
 function json(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,OPTIONS", "cache-control": "no-store" });
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-private-network": "true", "cache-control": "no-store" });
   res.end(JSON.stringify(body));
 }
 const server = http.createServer(async (req, res) => {
