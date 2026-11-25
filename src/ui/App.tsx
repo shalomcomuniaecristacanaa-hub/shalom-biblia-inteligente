@@ -5,7 +5,7 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
 type ConnectionSettings = { grandmaIp: string; vmixIp: string };
-type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number };
+type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string };
 type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
 const defaultLightingGroups = (): LightingGroup[] => [
   { id: "front", name: "Frente", intensity: 100, color: "#ffffff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
@@ -98,6 +98,7 @@ export function App() {
   const [grandmaPresetNumber, setGrandmaPresetNumber] = useState("1");
   const [grandmaSavePreset, setGrandmaSavePreset] = useState(false);
   const [grandmaCatalogLoading, setGrandmaCatalogLoading] = useState(false);
+  const [grandmaSelectedLightingSceneId, setGrandmaSelectedLightingSceneId] = useState("");
   const bridgeRequest = async (path: string, body?: unknown) => {
     const response = await fetch("http://127.0.0.1:17842" + path, {
       method: body === undefined ? "GET" : "POST",
@@ -209,6 +210,55 @@ export function App() {
   const [lightingName, setLightingName] = useState("Nova cena");
   const [lightingPreset, setLightingPreset] = useState("custom");
   const [lightingTransition, setLightingTransition] = useState(3);
+
+  const sendSavedLightingSceneToGrandma = async () => {
+    const scene = lightingScenes.find(item => item.id === grandmaSelectedLightingSceneId);
+    const sequence = Number(grandmaSequenceNumber);
+    if (!scene) { setGrandmaBridgeStatus("Selecione uma cena salva no simulador."); return; }
+    if (!Number.isInteger(sequence) || sequence < 1 || sequence > 9999) { setGrandmaBridgeStatus("Informe um número de Sequence válido."); return; }
+    const mapped = scene.groups.map(group => ({group, maGroup:Number(group.grandmaGroup)}));
+    const missing = mapped.filter(item => !Number.isInteger(item.maGroup) || item.maGroup < 1 || item.maGroup > 9999);
+    if (missing.length) {
+      setGrandmaBridgeStatus("Configure o número do Group da GrandMA2 para: "+missing.map(item=>item.group.name).join(", ")+". Faça isso no Estúdio de Iluminação e salve a cena novamente.");
+      return;
+    }
+    const commands:string[] = [];
+    for (const item of mapped) {
+      const hex = String(item.group.color || "#ffffff").replace("#","");
+      if (!/^[0-9a-fA-F]{6}$/.test(hex)) { setGrandmaBridgeStatus("Cor inválida no grupo "+item.group.name+"."); return; }
+      const r = Math.round(parseInt(hex.slice(0,2),16)/255*100);
+      const g = Math.round(parseInt(hex.slice(2,4),16)/255*100);
+      const b = Math.round(parseInt(hex.slice(4,6),16)/255*100);
+      commands.push("Group "+item.maGroup+" At Dimmer "+Math.max(0,Math.min(100,Math.round(item.group.intensity))));
+      commands.push("Group "+item.maGroup+" At ColorRGB "+r+" "+g+" "+b);
+    }
+    try {
+      setGrandmaBridgeStatus("Verificando Sequence "+sequence+" e preparando "+commands.length+" comandos de iluminação...");
+      const check = await bridgeRequest("/command",{command:"List Sequence "+sequence});
+      const checkText = String(check.response || "");
+      if (!/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(checkText)) {
+        setGrandmaResponse(checkText);
+        setGrandmaBridgeStatus("A Sequence "+sequence+" já existe ou não foi possível confirmar que está livre. Nada foi enviado.");
+        return;
+      }
+      const dynamic = scene.groups.filter(group=>group.movement!=="fixed" || group.colorBehavior!=="static" || group.strobe>0);
+      const dynamicNote = dynamic.length ? "\n\nAtenção: movimento, onda/ciclo/pulso/perseguição e estrobo configurados na prévia ainda não são traduzidos automaticamente em efeitos MA2. Esta primeira transferência envia somente intensidade e cor estáticas por Group." : "";
+      if (!window.confirm("Enviar a cena salva \""+scene.name+"\" para a GrandMA2?\\n\\nSerá aplicado no Programmer: "+mapped.map(item=>item.group.name+" → Group "+item.maGroup).join("\\n")+".\\nDepois será gravada como Cue 1 da Sequence "+sequence+"."+dynamicNote+"\\n\\nConfirme que os Groups estão mapeados corretamente e que a mesa está em modo de teste.")) return;
+      const replies:string[] = [];
+      for (const command of commands) {
+        const result = await bridgeRequest("/command",{command});
+        replies.push("> "+command+"\n"+String(result.response || "Comando aceito; sem texto de retorno."));
+      }
+      const store = await bridgeRequest("/command",{command:"Store Cue 1 Sequence "+sequence});
+      replies.push("> Store Cue 1 Sequence "+sequence+"\n"+String(store.response || "Comando enviado."));
+      const label = await bridgeRequest("/command",{command:'Label Sequence '+sequence+' "'+String(scene.name).replace(/["\\r\\n]/g,"").slice(0,48)+'"'});
+      replies.push("> Label Sequence "+sequence+"\n"+String(label.response || "Nome enviado."));
+      setGrandmaResponse(replies.join("\n\n"));
+      setGrandmaBridgeStatus("Cena \""+scene.name+"\" transferida para o Programmer e cadastro enviado à Sequence "+sequence+". Confira na GrandMA2; nenhum Go foi executado.");
+      await readGrandmaCatalog();
+    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+  };
+
 
   useEffect(() => {
     const off = onMessage(raw => {
@@ -425,7 +475,7 @@ export function App() {
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
       {lightingGroups.map((g,i)=><div className="importbox" key={g.id}><strong>{g.name}</strong>
-        <label>Cor<input type="color" value={g.color} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,color:e.target.value}:x))}/></label>
+        <label>Group na GrandMA2<input type="number" min="1" max="9999" value={g.grandmaGroup ?? ""} placeholder="Ex.: 1" onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,grandmaGroup:e.target.value}:x))}/></label><label>Cor<input type="color" value={g.color} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,color:e.target.value}:x))}/></label>
         <label>Intensidade: {g.intensity}%<input type="range" min="0" max="100" value={g.intensity} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,intensity:Number(e.target.value)}:x))}/></label>
         <label>Movimento<select value={g.movement} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,movement:e.target.value}:x))}><option value="fixed">Fixo</option><option value="sweep">Varredura</option><option value="circle">Circular</option></select></label>
         <label>Comportamento de cor<select value={g.colorBehavior} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,colorBehavior:e.target.value}:x))}><option value="static">Estática</option><option value="wave">Onda</option><option value="rainbow">Ciclo</option><option value="pulse">Pulso</option><option value="chase">Perseguição</option></select></label>
@@ -433,7 +483,7 @@ export function App() {
         <label>Estrobo: {g.strobe}%<input type="range" min="0" max="100" value={g.strobe} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,strobe:Number(e.target.value)}:x))}/></label>
         <div style={{height:12,borderRadius:6,background:g.color,opacity:g.intensity/100,boxShadow:"0 0 18px "+g.color}}/>
       </div>)}</div>
-      <div className="actions"><button className="primary" onClick={()=>postMessage({type:"save-lighting-scene",scene:{id:"scene-"+Date.now(),name:lightingName.trim()||"Nova cena",preset:lightingPreset,transition:lightingTransition,groups:lightingGroups}})}>Salvar cena</button><button className="ghost" onClick={()=>{setLightingGroups(defaultLightingGroups());setLightingPreset("custom");}}>Restaurar padrão</button></div>
+      <div className="actions"><button className="primary" onClick={()=>postMessage({type:"save-lighting-scene",scene:{id:"scene-"+Date.now(),name:lightingName.trim()||"Nova cena",preset:lightingPreset,transition:lightingTransition,groups:lightingGroups.map(g=>({...g,grandmaGroup:String(g.grandmaGroup ?? "").trim()}))}})}>Salvar cena</button><button className="ghost" onClick={()=>{setLightingGroups(defaultLightingGroups());setLightingPreset("custom");}}>Restaurar padrão</button></div>
       <h3>Cenas salvas</h3>{!lightingScenes.length?<p className="hint">Ainda não há cenas salvas.</p>:lightingScenes.map(scene=><div className="verse" key={scene.id}><div className="verse-head"><div><strong>{scene.name}</strong><small>{scene.groups.length} grupos · transição {scene.transition}s</small></div><button className="go" onClick={()=>{setLightingName(scene.name);setLightingPreset(scene.preset);setLightingTransition(scene.transition);setLightingGroups(scene.groups);}}>Carregar no simulador</button></div></div>)}
     </section>}
     {tab === "live" && <>
@@ -650,7 +700,7 @@ export function App() {
         <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
         
         <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" disabled={grandmaCatalogLoading} onClick={readGrandmaCatalog}>{grandmaCatalogLoading ? "Lendo show..." : "↻ Ler grupos, 12 tipos de preset, cenas e macros"}</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
-        <div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
+        <div className="scheduler-section"><h3>Enviar uma cena salva do Estúdio de Iluminação</h3><p className="hint">Selecione uma cena já montada no plugin. Os grupos precisam ter o número correspondente de Group na GrandMA2 configurado no Estúdio. A transferência aplica intensidade e cor no Programmer e grava uma Cue 1 em uma Sequence nova.</p><label>Cena salva<select value={grandmaSelectedLightingSceneId} onChange={e=>{setGrandmaSelectedLightingSceneId(e.target.value);const selected=lightingScenes.find(scene=>scene.id===e.target.value);if(selected){setGrandmaSceneName(selected.name);}}}><option value="">Selecione uma cena...</option>{lightingScenes.map(scene=><option key={scene.id} value={scene.id}>{scene.name}</option>)}</select></label><label>Número da Sequence para gravar<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric"/></label><button className="primary" disabled={!lightingScenes.length} onClick={sendSavedLightingSceneToGrandma}>Enviar cena selecionada para GrandMA2</button><p className="hint">A prévia do plugin é apenas uma simulação. Movimento, onda, ciclo, pulso, perseguição e estrobo ainda exigem programação de efeitos/presets na GrandMA2; não serão simulados como se já estivessem programados.</p></div><div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
