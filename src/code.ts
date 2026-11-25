@@ -16,6 +16,24 @@ let lastBibleSnapshot = "";
 let scheduleWatchTimer: ReturnType<typeof setInterval> | undefined;
 let scheduleWatchBusy = false;
 
+
+async function callVmix(functionName: string, input?: string) {
+  const settings = await spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY) ?? {};
+  const host = String(settings.vmixIp ?? "").trim();
+  const port = Number(settings.vmixPort ?? 8088);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Porta da API vMix inválida.");
+  if (!host) throw new Error("Informe e salve o IP do computador vMix em Configurações.");
+  const params = new URLSearchParams();
+  if (functionName) params.set("Function", functionName);
+  if (input) params.set("Input", input);
+  const query = params.toString();
+  const response = await fetch(`http://${host}:${port}/api/${query ? "?" + query : ""}`, { method: "GET" });
+  if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
+  const body = await response.text();
+  if (!body.trim()) throw new Error("O vMix respondeu sem conteúdo.");
+  return body;
+}
+
 async function runDueSchedules() {
   if (scheduleWatchBusy) return;
   scheduleWatchBusy = true;
@@ -53,7 +71,7 @@ async function runDueSchedules() {
         await runStep("grandma2", async () => { throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador."); });
       }
       if (schedule.vmixFunction || schedule.startStream) {
-        await runStep("vmix", async () => { throw new Error("O envio de comandos vMix ainda não está conectado ao agendador."); });
+        await runStep("vmix", async () => {\n          if (schedule.vmixFunction) {\n            const parts = String(schedule.vmixFunction).split(",").map((part: string) => part.trim());\n            await callVmix(parts[0], parts[1]);\n          }\n          if (schedule.startStream) await callVmix("StartStreaming");\n        });
       }
       schedule.stepResults = results;
       schedule.executedAt = new Date().toISOString();
@@ -453,6 +471,19 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
+    } else if (msg.type === "vmix-start-stream") {
+      await callVmix("StartStreaming");
+      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para iniciar a transmissão enviado." });
+    } else if (msg.type === "vmix-stop-stream") {
+      await callVmix("StopStreaming");
+      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para parar a transmissão enviado." });
+    } else if (msg.type === "vmix-status") {
+      const xml = await callVmix("");
+      const streaming = /<streaming>True<\/streaming>/i.test(xml);
+      spresenter.ui.postMessage({ type: "vmix-status-result", streaming, message: streaming ? "Transmissão ao vivo" : "Transmissão parada" });
+    } else if (msg.type === "test-vmix-connection") {
+      await callVmix("");
+      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });
     } else if (msg.type === "save-connection-settings") {
       const settings = msg.connectionSettings ?? {};
       const validateIp = (value: unknown, label: string) => {
@@ -466,8 +497,10 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       };
       const normalized = {
         grandmaIp: validateIp(settings.grandmaIp, "GrandMA2"),
-        vmixIp: validateIp(settings.vmixIp, "vMix")
+        vmixIp: validateIp(settings.vmixIp, "vMix"),
+        vmixPort: Number(settings.vmixPort ?? 8088)
       };
+      if (!Number.isInteger(normalized.vmixPort) || normalized.vmixPort < 1 || normalized.vmixPort > 65535) throw new Error("Informe uma porta válida para a API do vMix (1–65535).");
       await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
