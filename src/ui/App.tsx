@@ -5,7 +5,7 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
 type ConnectionSettings = { grandmaIp: string; vmixIp: string };
-type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string };
+type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string; grandmaPositionPreset?: string };
 type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
 const defaultLightingGroups = (): LightingGroup[] => [
   { id: "front", name: "Frente", intensity: 100, color: "#ffffff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
@@ -230,7 +230,13 @@ export function App() {
       const g = Math.round(parseInt(hex.slice(2,4),16)/255*100);
       const b = Math.round(parseInt(hex.slice(4,6),16)/255*100);
       commands.push("Group "+item.maGroup+" At Dimmer "+Math.max(0,Math.min(100,Math.round(item.group.intensity))));
-      commands.push("Group "+item.maGroup+" At ColorRGB "+r+" "+g+" "+b);
+      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB1" At '+r);
+      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB2" At '+g);
+      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB3" At '+b);
+      const positionPreset = Number(item.group.grandmaPositionPreset);
+      if (item.group.movement !== "fixed" && Number.isInteger(positionPreset) && positionPreset > 0 && positionPreset <= 9999) {
+        commands.push("Group "+item.maGroup+" At Preset 2."+positionPreset);
+      }
     }
     try {
       setGrandmaBridgeStatus("Verificando Sequence "+sequence+" e preparando "+commands.length+" comandos de iluminação...");
@@ -241,8 +247,8 @@ export function App() {
         setGrandmaBridgeStatus("A Sequence "+sequence+" já existe ou não foi possível confirmar que está livre. Nada foi enviado.");
         return;
       }
-      const dynamic = scene.groups.filter(group=>group.movement!=="fixed" || group.colorBehavior!=="static" || group.strobe>0);
-      const dynamicNote = dynamic.length ? "\n\nAtenção: movimento, onda/ciclo/pulso/perseguição e estrobo configurados na prévia ainda não são traduzidos automaticamente em efeitos MA2. Esta primeira transferência envia somente intensidade e cor estáticas por Group." : "";
+      const dynamic = scene.groups.filter(group=>group.colorBehavior!=="static" || group.strobe>0 || (group.movement!=="fixed" && !Number.isInteger(Number(group.grandmaPositionPreset))));
+      const dynamicNote = dynamic.length ? "\n\nAtenção: onda/ciclo/pulso/perseguição e estrobo da prévia ainda exigem efeitos/macros MA2. Movimento só será aplicado quando houver um preset Position da mesa informado no grupo. A cor RGB exige aparelhos com atributos ColorRGB; fixtures com roda de cor precisam de preset Color já cadastrado na mesa." : "";
       if (!window.confirm("Enviar a cena salva \""+scene.name+"\" para a GrandMA2?\\n\\nSerá aplicado no Programmer: "+mapped.map(item=>item.group.name+" → Group "+item.maGroup).join("\\n")+".\\nDepois será gravada como Cue 1 da Sequence "+sequence+"."+dynamicNote+"\\n\\nConfirme que os Groups estão mapeados corretamente e que a mesa está em modo de teste.")) return;
       const replies:string[] = [];
       for (const command of commands) {
@@ -475,7 +481,7 @@ export function App() {
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
       {lightingGroups.map((g,i)=><div className="importbox" key={g.id}><strong>{g.name}</strong>
-        <label>Group na GrandMA2<input type="number" min="1" max="9999" value={g.grandmaGroup ?? ""} placeholder="Ex.: 1" onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,grandmaGroup:e.target.value}:x))}/></label><label>Cor<input type="color" value={g.color} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,color:e.target.value}:x))}/></label>
+        <label>Group na GrandMA2<input type="number" min="1" max="9999" value={g.grandmaGroup ?? ""} placeholder="Ex.: 1" onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,grandmaGroup:e.target.value}:x))}/></label><label>Preset Position MA2 (opcional)<input type="number" min="1" max="9999" value={g.grandmaPositionPreset ?? ""} placeholder="Ex.: 3" onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,grandmaPositionPreset:e.target.value}:x))}/></label><label>Cor<input type="color" value={g.color} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,color:e.target.value}:x))}/></label>
         <label>Intensidade: {g.intensity}%<input type="range" min="0" max="100" value={g.intensity} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,intensity:Number(e.target.value)}:x))}/></label>
         <label>Movimento<select value={g.movement} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,movement:e.target.value}:x))}><option value="fixed">Fixo</option><option value="sweep">Varredura</option><option value="circle">Circular</option></select></label>
         <label>Comportamento de cor<select value={g.colorBehavior} onChange={e=>setLightingGroups(gs=>gs.map((x,j)=>j===i?{...x,colorBehavior:e.target.value}:x))}><option value="static">Estática</option><option value="wave">Onda</option><option value="rainbow">Ciclo</option><option value="pulse">Pulso</option><option value="chase">Perseguição</option></select></label>
