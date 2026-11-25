@@ -21,7 +21,7 @@ export type DeviceProbeResult = {
 
 function isPrivateIpv4(host: string): boolean {
   const parts = host.split(".");
-  if (parts.length !== 4 || parts.some(part => !/^\\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+  if (parts.length !== 4 || parts.some(part => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
   const [a, b] = parts.map(Number);
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
@@ -35,7 +35,7 @@ export function normalizeDevice(input: any): ManagedDevice {
   if (!id || !name) throw new Error("Informe um nome para o equipamento.");
   if (!isPrivateIpv4(host)) throw new Error("Use um IPv4 privado da rede local (10.x, 172.16–31.x ou 192.168.x).");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Informe uma porta válida (1–65535).");
-  if (!healthPath.startsWith("/") || healthPath.startsWith("//") || /[\\r\\n]/.test(healthPath)) throw new Error("O caminho de saúde deve começar com / e ser um caminho local.");
+  if (!healthPath.startsWith("/") || healthPath.startsWith("//") || /[\r\n]/.test(healthPath)) throw new Error("O caminho de saúde deve começar com / e ser um caminho local.");
   const kind = ["vmix", "agent", "other"].includes(input?.kind) ? input.kind : "other";
   return { id, name, kind, host, port, healthPath, enabled: input?.enabled !== false };
 }
