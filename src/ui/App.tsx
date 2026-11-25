@@ -88,7 +88,8 @@ export function App() {
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
   const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
   const [grandmaTelnetPort, setGrandmaTelnetPort] = useState("30000");
-  const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");\n  const [vmixStatus, setVmixStatus] = useState("Não testado");
+  const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");
+  const [vmixStatus, setVmixStatus] = useState("Não testado");
   const [grandmaCommand, setGrandmaCommand] = useState("List Group Thru 10");
   const [grandmaResponse, setGrandmaResponse] = useState("");
   const [grandmaCatalog, setGrandmaCatalog] = useState<{name:string;response:string}[]>([]);
@@ -737,7 +738,8 @@ export function App() {
       <label>IP do computador que executa o vMix
         <input value={connectionSettings.vmixIp} onChange={e => setConnectionSettings(v => ({...v, vmixIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.60" inputMode="decimal" />
       </label><label>Porta da API vMix<input type="number" min="1" max="65535" value={connectionSettings.vmixPort ?? "8088"} onChange={e => setConnectionSettings(v => ({...v, vmixPort:e.target.value}))} placeholder="8088" /></label><p className="hint">No computador do vMix, habilite a API/Web Controller nas configurações. Libere a porta escolhida no firewall do Windows para a rede local.</p>
-      <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>\n      <div className="scheduler-section"><h3>Controle da transmissão vMix</h3><p className="hint">Status: {vmixStatus}. Consulte o estado antes de operar. Os botões enviam comandos diretamente ao vMix configurado.</p><div className="actions"><button className="ghost" onClick={() => postMessage({type:"test-vmix-connection"})}>Testar conexão</button><button className="ghost" onClick={() => postMessage({type:"vmix-status"})}>Atualizar status</button><button className="primary" onClick={() => postMessage({type:"vmix-start-stream"})}>Iniciar transmissão</button><button className="danger" onClick={() => postMessage({type:"vmix-stop-stream"})}>Parar transmissão</button></div></div>
+      <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
+      <div className="scheduler-section"><h3>Controle da transmissão vMix</h3><p className="hint">Status: {vmixStatus}. Consulte o estado antes de operar. Os botões enviam comandos diretamente ao vMix configurado.</p><div className="actions"><button className="ghost" onClick={() => postMessage({type:"test-vmix-connection"})}>Testar conexão</button><button className="ghost" onClick={() => postMessage({type:"vmix-status"})}>Atualizar status</button><button className="primary" onClick={() => postMessage({type:"vmix-start-stream"})}>Iniciar transmissão</button><button className="danger" onClick={() => postMessage({type:"vmix-stop-stream"})}>Parar transmissão</button></div></div>
       <details className="importbox" style={{marginTop:14}}>
         <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
         <p className="hint">A ponte local precisa estar iniciada no computador que executa o SPresenter. A senha é opcional e, quando informada, é enviada somente à ponte e fica em memória enquanto o processo estiver rodando.</p>
