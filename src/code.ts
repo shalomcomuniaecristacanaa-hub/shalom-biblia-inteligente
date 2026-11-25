@@ -20,11 +20,14 @@ let scheduleWatchBusy = false;
 async function callVmix(functionName: string, input?: string) {
   const settings = await spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY) ?? {};
   const host = String(settings.vmixIp ?? "").trim();
+  const port = Number(settings.vmixPort ?? 8088);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Porta da API vMix inválida.");
   if (!host) throw new Error("Informe e salve o IP do computador vMix em Configurações.");
   const params = new URLSearchParams();
   if (functionName) params.set("Function", functionName);
   if (input) params.set("Input", input);
-  const query = params.toString();\n  const response = await fetch(`http://${host}:8088/api/${query ? "?" + query : ""}`, { method: "GET" });
+  const query = params.toString();
+  const response = await fetch(`http://${host}:${port}/api/${query ? "?" + query : ""}`, { method: "GET" });
   if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
   const body = await response.text();
   if (!body.trim()) throw new Error("O vMix respondeu sem conteúdo.");
@@ -481,8 +484,10 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       };
       const normalized = {
         grandmaIp: validateIp(settings.grandmaIp, "GrandMA2"),
-        vmixIp: validateIp(settings.vmixIp, "vMix")
+        vmixIp: validateIp(settings.vmixIp, "vMix"),
+        vmixPort: Number(settings.vmixPort ?? 8088)
       };
+      if (!Number.isInteger(normalized.vmixPort) || normalized.vmixPort < 1 || normalized.vmixPort > 65535) throw new Error("Informe uma porta válida para a API do vMix (1–65535).");
       await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
