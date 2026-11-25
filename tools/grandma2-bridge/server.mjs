@@ -51,7 +51,7 @@ function onData(chunk) {
   if (!text) return;
   buffer = (buffer + text).slice(-65536);
   const lower = buffer.toLowerCase();
-  if (!loggedIn && /(login|username|user name)\\s*[:>]?\\s*$/i.test(buffer.trim())) {
+  if (!loggedIn && (/(please\\s+login|login|username|user name)/i.test(buffer))) {
     socket?.write(`Login ${config.username} ${config.password}\n`);
     buffer = "";
     return;
