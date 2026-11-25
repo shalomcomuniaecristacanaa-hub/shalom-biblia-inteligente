@@ -69,3 +69,30 @@ Se o processo for encerrado enquanto uma etapa estiver `running`, a próxima ini
 3. Editor visual de sequência e dependências.
 4. Painel ao vivo com estado de cada etapa e ações de retomar/cancelar.
 5. Modo de ensaio sem envio de comandos reais.
+
+
+## Fase 2 — Device Manager e primeira camada de rede
+
+### Entregue no repositório
+
+- Cadastro persistente de até 30 dispositivos, com nome, tipo, IPv4 privado, porta HTTP e rota de saúde.
+- Validação de IPv4 em redes privadas RFC1918 (10/8, 172.16/12 e 192.168/16); destinos públicos e nomes DNS são recusados.
+- Teste individual por HTTP GET, com timeout de 4 segundos e sem envio de comandos de operação.
+- Estado do último teste (online/offline), horário e erro persistidos e apresentados no painel.
+- Exclusão e atualização do cadastro pela interface de Configurações.
+
+### Limites deliberados desta entrega
+
+- O teste confirma somente que o endpoint HTTP respondeu com status de sucesso. Não confirma que o equipamento está pronto para operar, nem valida a reprodução de mídia ou o estado de transmissão.
+- O vMix pode ser cadastrado usando a porta da API e uma rota GET suportada pela instalação; isso é um teste HTTP, separado da confirmação de streaming.
+- A GrandMA2 usa Telnet e ainda requer um adaptador TCP autenticado integrado ao motor sequencial. O Device Manager HTTP não tenta simular uma conexão Telnet.
+- A ponte PowerPoint existente permanece em 127.0.0.1:17843. Ela não foi exposta à LAN. O controle a partir de outro computador depende de um agente Windows dedicado com autenticação, autorização por comandos, proteção contra repetição e instalação/pareamento explícitos.
+- Não há descoberta automática de computadores na rede; os endereços são cadastrados pelo operador.
+
+### Próximas integrações
+
+1. Agente Windows autenticado para PowerPoint e comandos locais, com instalação por computador e pareamento seguro.
+2. Adaptador Telnet GrandMA2 no host de rede autorizado, com login e confirmação de prompt/resposta.
+3. Adaptador vMix que consulte XML de estado após cada comando e valide a transição solicitada.
+4. Confirmação de reprodução do YouTube por um player controlado, em vez de considerar a abertura de URL como reprodução.
+5. Testes de integração em rede real, incluindo firewall, CORS, perda de conexão e reinicialização dos agentes.
