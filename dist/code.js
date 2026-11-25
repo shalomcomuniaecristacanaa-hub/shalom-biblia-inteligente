@@ -270,7 +270,8 @@
       spresenter.storage.get(GROUP_BACKGROUNDS_KEY),
       spresenter.storage.get(EVENT_SCHEDULES_KEY),
       spresenter.storage.get(CONNECTION_SETTINGS_KEY),
-      spresenter.storage.get(LIGHTING_SCENES_KEY)
+      spresenter.storage.get(LIGHTING_SCENES_KEY),
+      spresenter.storage.get(MANAGED_DEVICES_KEY)
     ]);
     spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [], managedDevices: managedDevices ?? [] });
   }
