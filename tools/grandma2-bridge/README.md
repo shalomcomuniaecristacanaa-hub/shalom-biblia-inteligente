@@ -1,28 +1,46 @@
 # Ponte local GrandMA2 Telnet
 
-Protótipo de serviço local para conectar o plugin Shalom à GrandMA2/onPC via Telnet.
+Ponte local entre o plugin Shalom Bíblia Inteligente e a GrandMA2 / grandMA2 onPC.
 
 ## Requisitos
-- Node.js 20 ou superior
-- GrandMA2/onPC com Telnet habilitado e acessível pela rede
-- No Windows, execute a ponte no mesmo computador que roda o SPresenter
+- Windows com Node.js 20 LTS ou superior.
+- GrandMA2/onPC na rede, com Telnet habilitado e usuário autorizado.
+- A ponte deve rodar no mesmo computador do SPresenter (ela escuta somente em 127.0.0.1).
 
-## Iniciar no Windows
+## Instalação e inicialização
 1. Instale o Node.js LTS.
-2. Abra esta pasta no Explorador e execute `start-windows.bat`.
-3. O serviço escuta somente em `127.0.0.1:17842`; não fica exposto à rede.
-4. A porta Telnet padrão da GrandMA2 é 30000. O serviço ainda requer configuração por chamada HTTP local.
+2. Extraia/abra esta pasta do repositório.
+3. Execute `start-windows.bat` e mantenha a janela aberta.
+4. No SPresenter, abra Configurações → Endereços dos equipamentos → Configurar acesso Telnet.
+5. Informe o IP da máquina GrandMA2, usuário (por exemplo administrator) e senha; clique em Configurar ponte local e depois Testar conexão.
+6. Use “Ler grupos, presets, cenas e macros” para consultar o show carregado.
 
-## Endpoints locais
-- `GET http://127.0.0.1:17842/status`
-- `POST /configure` JSON: `{"host":"IP_DA_MESA","port":30000,"username":"administrator","password":"SENHA"}`
-- `POST /connect`
-- `POST /command` JSON: `{"command":"List Group Thru 10"}`
-- `POST /disconnect`
+Porta Telnet padrão: 30000. O serviço HTTP local usa 127.0.0.1:17842.
 
-## Segurança e limitações
-- A ponte aceita conexões HTTP apenas do próprio computador.
-- A senha permanece somente em memória do processo; encerre o processo para apagá-la.
-- Não coloque credenciais em commits, arquivos .env ou capturas de tela.
-- Este é um protótipo técnico: o diálogo de autenticação e o enquadramento das respostas Telnet variam conforme versão/configuração da GrandMA2. Confirme a resposta no console da mesa antes de usar comandos que alterem luzes.
-- A interface do plugin SPresenter ainda não está conectada a esta ponte; a configuração e os testes iniciais são feitos via cliente HTTP local. Não é ainda uma integração pronta para operação.
+## Consultas incluídas
+O plugin envia comandos documentados de consulta:
+- `List Group Thru 10` — primeiros dez grupos.
+- `List Preset` — presets disponíveis no destino atual.
+- `List Sequence` — sequências/cenas.
+- `List Macro` — macros.
+
+O resultado depende do show aberto, destino selecionado, versão e permissões do usuário. Para detalhar uma sequência, use `List Cue` no destino correspondente ou abra `Edit Sequence [número]` no console. A listagem de presets pode exigir selecionar o tipo/destino de preset, por exemplo `List Preset 4` para Color.
+
+## Gravar uma nova cena
+1. Na GrandMA2, selecione os fixtures/grupos e prepare os valores no Programmer.
+2. No plugin, informe um número de Sequence ainda livre e o nome.
+3. Clique “Gravar cena na GrandMA2” e confirme a caixa de segurança.
+4. O plugin envia `Store Cue 1 Sequence [número]` e `Label Sequence [número] "nome"`.
+5. Confira a Sequence na mesa antes de executá-la. O comando Store grava os valores ativos do Programmer; ele não cria automaticamente efeitos, movimentos ou programação que não estejam preparados.
+
+Para executar uma cena já existente, use o comando apropriado ao seu show, por exemplo `Go Sequence [número]` ou `Go Executor [página].[executor]`. A execução pode alterar a iluminação ao vivo.
+
+## Segurança e limites
+- A API HTTP aceita somente conexões locais (loopback).
+- A senha fica apenas na memória do processo; “Desconectar” ou fechar a janela da ponte limpa a sessão/credencial.
+- Não salve credenciais em arquivos ou commits.
+- Telnet não é criptografado. Use uma rede de controle confiável.
+- O serviço remove comandos de negociação Telnet e aguarda o prompt `[Channel]>`, mas o diálogo pode variar entre versões e configurações. A conexão precisa ser testada na mesa real.
+- `List` exibe dados no feedback da linha de comando. Nem todos os parâmetros internos de um preset/cue são devolvidos como texto por Telnet. Exportação XML/CSV e transferência de arquivos precisam de um fluxo separado.
+- A gravação de cenas altera o show. Use número livre, confirme o Programmer e valide na mesa; não use em operação ao vivo sem teste.
+- Ainda não foi possível executar teste de rede contra a GrandMA2 física/onPC nesta etapa.
