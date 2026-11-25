@@ -18,29 +18,41 @@ let loginSent = false;
 let pending = [];
 let lastError = "";
 
+let telnetRemainder = Buffer.alloc(0);
 function cleanTelnet(chunk) {
-  // Remove Telnet IAC negotiation triplets and command bytes from the data stream.
-  const input = Buffer.from(chunk);
+  // Responde à negociação Telnet em vez de simplesmente descartar os bytes IAC.
+  const input = Buffer.concat([telnetRemainder, Buffer.from(chunk)]);
   const out = [];
-  for (let i = 0; i < input.length; i++) {
-    if (input[i] === 255) {
-      const cmd = input[i + 1];
-      if (cmd === 255) { out.push(255); i++; continue; }
-      if (cmd === 250) { // sub-negotiation: skip through IAC SE
-        i += 2;
-        while (i < input.length && !(input[i] === 255 && input[i + 1] === 240)) i++;
-        i++;
-      } else if (cmd === 251 || cmd === 252 || cmd === 253 || cmd === 254) {
-        i += 2;
-      } else i++;
+  const replies = [];
+  let i = 0;
+  while (i < input.length) {
+    if (input[i] !== 255) { out.push(input[i++]); continue; }
+    if (i + 1 >= input.length) break;
+    const cmd = input[i + 1];
+    if (cmd === 255) { out.push(255); i += 2; continue; }
+    if (cmd === 250) {
+      let end = i + 2;
+      while (end + 1 < input.length && !(input[end] === 255 && input[end + 1] === 240)) end++;
+      if (end + 1 >= input.length) break;
+      i = end + 2;
       continue;
     }
-    out.push(input[i]);
+    if (cmd === 251 || cmd === 252 || cmd === 253 || cmd === 254) {
+      if (i + 2 >= input.length) break;
+      const option = input[i + 2];
+      if (cmd === 251) replies.push(255, option === 1 || option === 3 ? 253 : 254, option);
+      else if (cmd === 253) replies.push(255, option === 3 ? 251 : 252, option);
+      i += 3;
+      continue;
+    }
+    i += 2;
   }
+  telnetRemainder = input.subarray(i);
+  if (replies.length && socket && !socket.destroyed) socket.write(Buffer.from(replies));
   return Buffer.from(out).toString("utf8");
 }
 function closeSocket(reason = "Connection closed") {
-  connected = false; loggedIn = false; loginSent = false; buffer = "";
+  connected = false; loggedIn = false; loginSent = false; buffer = ""; telnetRemainder = Buffer.alloc(0);
   if (loginTimer) clearTimeout(loginTimer);
   loginTimer = null;
   if (connectWaiter) { connectWaiter.reject(new Error(reason)); connectWaiter = null; }
@@ -69,7 +81,7 @@ function onData(chunk) {
     // Enviamos o login uma única vez por conexão.
     if (!loginSent && (/(please\s+login|username|user name)/i.test(buffer) || promptSeen)) {
       loginSent = true;
-      socket?.write("Login " + config.username + (config.password ? " " + config.password : "") + "\n");
+      socket?.write("Login " + config.username + (config.password ? " " + config.password : "") + "\r\n");
       buffer = "";
       return;
     }
@@ -153,7 +165,7 @@ function send(command) {
     entry.resolve = value => { clearTimeout(timer); resolve(value); };
     entry.reject = error => { clearTimeout(timer); reject(error); };
     pending.push(entry);
-    socket.write(command + "\n");
+    socket.write(command + "\r\n");
   });
 }
 function json(res, status, body) {
