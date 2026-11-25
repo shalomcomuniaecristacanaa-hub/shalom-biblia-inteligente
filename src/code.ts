@@ -471,7 +471,20 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
-    } else if (msg.type === "vmix-start-stream") {\n      await callVmix("StartStreaming");\n      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para iniciar a transmissão enviado." });\n    } else if (msg.type === "vmix-stop-stream") {\n      await callVmix("StopStreaming");\n      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para parar a transmissão enviado." });\n    } else if (msg.type === "vmix-status") {\n      const xml = await callVmix("");\n      const streaming = /<streaming>True<\\/streaming>/i.test(xml);\n      spresenter.ui.postMessage({ type: "vmix-status-result", streaming, message: streaming ? "Transmissão ao vivo" : "Transmissão parada" });\n    } else if (msg.type === "test-vmix-connection") {\n      await callVmix("");\n      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });\n    } else if (msg.type === "save-connection-settings") {
+    } else if (msg.type === "vmix-start-stream") {
+      await callVmix("StartStreaming");
+      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para iniciar a transmissão enviado." });
+    } else if (msg.type === "vmix-stop-stream") {
+      await callVmix("StopStreaming");
+      spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para parar a transmissão enviado." });
+    } else if (msg.type === "vmix-status") {
+      const xml = await callVmix("");
+      const streaming = /<streaming>True<\/streaming>/i.test(xml);
+      spresenter.ui.postMessage({ type: "vmix-status-result", streaming, message: streaming ? "Transmissão ao vivo" : "Transmissão parada" });
+    } else if (msg.type === "test-vmix-connection") {
+      await callVmix("");
+      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });
+    } else if (msg.type === "save-connection-settings") {
       const settings = msg.connectionSettings ?? {};
       const validateIp = (value: unknown, label: string) => {
         const ip = String(value ?? "").trim();
