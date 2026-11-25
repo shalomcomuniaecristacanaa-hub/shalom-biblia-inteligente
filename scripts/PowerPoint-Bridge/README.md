@@ -35,7 +35,7 @@ O auxiliar precisa ficar no computador que executa o SPresenter e o PowerPoint. 
 ## Diagnóstico
 
 Se o teste no plugin falhar:
-1. Confirme que a janela do auxiliar continua aberta.
+1. Confirme que o auxiliar foi configurado e está em execução em segundo plano.
 2. Verifique se o endereço local `http://127.0.0.1:17843/health` responde no navegador.
 3. Confirme que o Microsoft PowerPoint desktop está instalado (a versão web não oferece a automação COM).
 4. Reinicie o auxiliar e tente novamente.
