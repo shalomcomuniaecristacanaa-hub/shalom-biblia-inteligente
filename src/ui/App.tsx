@@ -4,7 +4,7 @@ import { onMessage, postMessage } from "@spresenter/plugin-sdk/ui";
 type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
-type ConnectionSettings = { grandmaIp: string; vmixIp: string };
+type ConnectionSettings = { grandmaIp: string; vmixIp: string; vmixPort: string | number };
 type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string; grandmaPositionPreset?: string };
 type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
 const defaultLightingGroups = (): LightingGroup[] => [
@@ -24,7 +24,7 @@ const lightingPresets = [
   { id: "warm", name: "Culto / Palavra", description: "Luz quente e estável", movement: "fixed", colorBehavior: "static", color: "#ffbd72" }
 ];
 
-const blankConnections = (): ConnectionSettings => ({ grandmaIp: "", vmixIp: "" });
+const blankConnections = (): ConnectionSettings => ({ grandmaIp: "", vmixIp: "", vmixPort: "8088" });
 type EventSchedule = { id: string; name: string; date: string; time: string; coverGuid: string; song: string; youtubeUrl?: string; grandmaCommand: string; vmixFunction: string; startStream: boolean; enabled: boolean };
 const blankSchedule = (): EventSchedule => ({ id: "", name: "", date: "", time: "", coverGuid: "", song: "", youtubeUrl: "", grandmaCommand: "", vmixFunction: "", startStream: false, enabled: true });
 const blank = (): Verse => ({ id: "", reference: "", text: "", group: "Geral", background: "", theme: "", book: "" });
@@ -733,7 +733,7 @@ export function App() {
       </label>
       <label>IP do computador que executa o vMix
         <input value={connectionSettings.vmixIp} onChange={e => setConnectionSettings(v => ({...v, vmixIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.60" inputMode="decimal" />
-      </label>
+      </label><label>Porta da API vMix<input type="number" min="1" max="65535" value={connectionSettings.vmixPort ?? "8088"} onChange={e => setConnectionSettings(v => ({...v, vmixPort:e.target.value}))} placeholder="8088" /></label><p className="hint">No computador do vMix, habilite a API/Web Controller nas configurações. Libere a porta escolhida no firewall do Windows para a rede local.</p>
       <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
       <details className="importbox" style={{marginTop:14}}>
         <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
