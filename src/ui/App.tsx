@@ -521,7 +521,7 @@ export function App() {
   };
   const uploadPowerPoint = async (file?: File) => {
     if (!file) return;
-    if (!/\\.(ppt|pptx)$/i.test(file.name)) { setPptStatus("Selecione um arquivo .ppt ou .pptx."); return; }
+    if (!/\.(ppt|pptx)$/i.test(file.name)) { setPptStatus("Selecione um arquivo .ppt ou .pptx."); return; }
     if (file.size > 200 * 1024 * 1024) { setPptStatus("O arquivo excede o limite de 200 MB."); return; }
     setPptBusy(true); setPptStatus("Enviando apresentação original ao computador...");
     try {
