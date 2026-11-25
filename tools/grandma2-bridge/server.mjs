@@ -60,7 +60,7 @@ function onData(chunk) {
     loggedIn = true;
     if (loginTimer) clearTimeout(loginTimer);
     loginTimer = null;
-    if (connectWaiter) { connectWaiter.resolve(); connectWaiter = null; }
+    if (connectWaiter) { connectWaiter.resolve(); connectWaiter = null; buffer = ""; return; }
     if (pending.length) {
       const p = pending.shift();
       const response = buffer.replace(/\[Channel\]>\s*$/i, "").trim();
@@ -82,8 +82,8 @@ function connect() {
     socket = s;
     loginTimer = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
     connectWaiter = {
-      resolve: () => { clearTimeout(timeout); connected = true; loggedIn = true; resolve(); },
-      reject: error => { clearTimeout(timeout); reject(error); }
+      resolve: () => { if (loginTimer) clearTimeout(loginTimer); loginTimer = null; connected = true; loggedIn = true; resolve(); },
+      reject: error => { if (loginTimer) clearTimeout(loginTimer); loginTimer = null; reject(error); }
     };
     s.on("connect", () => { connected = true; });
     s.on("data", onData);
