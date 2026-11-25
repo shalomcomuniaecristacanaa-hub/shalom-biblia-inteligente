@@ -94,6 +94,10 @@ export function App() {
   const [grandmaCatalog, setGrandmaCatalog] = useState<{name:string;response:string}[]>([]);
   const [grandmaSequenceNumber, setGrandmaSequenceNumber] = useState("90");
   const [grandmaSceneName, setGrandmaSceneName] = useState("Nova cena Shalom");
+  const [grandmaPresetType, setGrandmaPresetType] = useState("4");
+  const [grandmaPresetNumber, setGrandmaPresetNumber] = useState("1");
+  const [grandmaSavePreset, setGrandmaSavePreset] = useState(false);
+  const [grandmaCatalogLoading, setGrandmaCatalogLoading] = useState(false);
   const bridgeRequest = async (path: string, body?: unknown) => {
     const response = await fetch("http://127.0.0.1:17842" + path, {
       method: body === undefined ? "GET" : "POST",
@@ -129,28 +133,74 @@ export function App() {
   };
 
   const readGrandmaCatalog = async () => {
-    const queries = [{name:"Grupos",command:"List Group Thru 10"},{name:"Presets",command:"List Preset"},{name:"Sequências / cenas",command:"List Sequence"},{name:"Macros",command:"List Macro"}];
+    const presetTypes = [
+      {id:1,name:"Dimmer"},{id:2,name:"Position"},{id:3,name:"Gobo"},{id:4,name:"Color"},
+      {id:5,name:"Beam"},{id:6,name:"Focus"},{id:7,name:"Shapers"},{id:8,name:"Video"},
+      {id:9,name:"Control"},{id:10,name:"Sound"},{id:11,name:"Media"},{id:12,name:"3D"}
+    ];
+    const queries = [
+      {name:"Grupos",command:"List Group"},
+      ...presetTypes.map(p=>({name:"Presets · "+p.id+" · "+p.name,command:"List Preset "+p.id})),
+      {name:"Sequências / cenas",command:"List Sequence"},
+      {name:"Macros",command:"List Macro"}
+    ];
     const results: {name:string;response:string}[] = [];
+    setGrandmaCatalogLoading(true);
     try {
-      setGrandmaBridgeStatus("Lendo dados do show...");
+      setGrandmaBridgeStatus("Lendo grupos, 12 tipos de preset, sequências e macros...");
       for (const item of queries) {
         const result = await bridgeRequest("/command", {command:item.command});
-        results.push({name:item.name,response:String(result.response || "(sem conteúdo retornado)")});
+        const raw = String(result.response || "").trim();
+        const empty = /NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(raw);
+        results.push({name:item.name,response:empty ? "Nenhum objeto cadastrado nesta categoria.\n\n"+raw : raw || "A mesa não retornou linhas para esta consulta."});
         setGrandmaCatalog([...results]);
       }
-      setGrandmaBridgeStatus("Leitura concluída. Confira os resultados.");
-    } catch (e) { setGrandmaCatalog(results); setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+      setGrandmaBridgeStatus("Leitura concluída: "+results.length+" consultas. Categorias vazias foram identificadas separadamente.");
+    } catch (e) {
+      setGrandmaCatalog(results);
+      setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e));
+    } finally { setGrandmaCatalogLoading(false); }
   };
   const createGrandmaScene = async () => {
     const n = Number(grandmaSequenceNumber);
-    if (!Number.isInteger(n) || n < 1 || n > 9999 || !grandmaSceneName.trim()) { setGrandmaBridgeStatus("Informe número e nome válidos."); return; }
-    if (!window.confirm("Atenção: isso grava os valores ATUAIS do Programmer como Cue 1 de uma nova Sequence. Confirme que os aparelhos e valores estão preparados. Continuar?")) return;
+    const pn = Number(grandmaPresetNumber);
+    const pt = Number(grandmaPresetType);
+    const cleanName = grandmaSceneName.trim();
+    if (!Number.isInteger(n) || n < 1 || n > 9999 || !cleanName || /["\r\n]/.test(cleanName)) {
+      setGrandmaBridgeStatus("Informe número de Sequence válido e nome sem aspas/quebras de linha."); return;
+    }
+    if (grandmaSavePreset && (!Number.isInteger(pn) || pn < 1 || pn > 9999 || !Number.isInteger(pt) || pt < 1 || pt > 12)) {
+      setGrandmaBridgeStatus("Informe tipo e número de preset válidos."); return;
+    }
     try {
-      await bridgeRequest("/command", {command:"Store Cue 1 Sequence " + n});
-      const label = grandmaSceneName.replace(/["\\\\]/g, "");
-      const result = await bridgeRequest("/command", {command:'Label Sequence ' + n + ' "' + label + '"'});
-      setGrandmaResponse(String(result.response || "Comandos de gravação enviados."));
-      setGrandmaBridgeStatus("Gravação enviada. Confirme a Sequence " + n + " na mesa.");
+      setGrandmaBridgeStatus("Verificando se os números escolhidos estão livres...");
+      const sequenceCheck = await bridgeRequest("/command", {command:"List Sequence "+n});
+      const sequenceText = String(sequenceCheck.response || "");
+      if (!/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(sequenceText)) {
+        setGrandmaBridgeStatus("A Sequence "+n+" já existe ou não foi possível confirmar que está livre. Nada foi gravado.");
+        setGrandmaResponse(sequenceText); return;
+      }
+      if (grandmaSavePreset) {
+        const presetCheck = await bridgeRequest("/command", {command:"List Preset "+pt+"."+pn});
+        const presetText = String(presetCheck.response || "");
+        if (!/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(presetText)) {
+          setGrandmaBridgeStatus("O preset "+pt+"."+pn+" já existe ou não foi possível confirmar que está livre. Nada foi gravado.");
+          setGrandmaResponse(presetText); return;
+        }
+      }
+      const presetNote = grandmaSavePreset ? "\nTambém será criado o preset "+pt+"."+pn+"." : "";
+      if (!window.confirm("Ação de gravação:\n• Salvar valores atuais do Programmer como Cue 1 da Sequence "+n+".\n• Nome: "+cleanName+"."+presetNote+"\n\nConfirme que os aparelhos/valores estão preparados. Deseja continuar?")) return;
+      const sequenceStore = await bridgeRequest("/command", {command:"Store Cue 1 Sequence "+n});
+      const sequenceLabel = await bridgeRequest("/command", {command:'Label Sequence '+n+' "'+cleanName+'"'});
+      const responses = ["Sequence "+n+": "+String(sequenceStore.response || "Store enviado."),String(sequenceLabel.response || "Nome enviado.")];
+      if (grandmaSavePreset) {
+        const presetStore = await bridgeRequest("/command", {command:"Store Preset "+pt+"."+pn});
+        const presetLabel = await bridgeRequest("/command", {command:'Label Preset '+pt+"."+pn+' "'+cleanName+'"'});
+        responses.push("Preset "+pt+"."+pn+": "+String(presetStore.response || "Store enviado."),String(presetLabel.response || "Nome enviado."));
+      }
+      setGrandmaResponse(responses.join("\n\n"));
+      setGrandmaBridgeStatus("Cadastro enviado. Confira Sequence"+(grandmaSavePreset?" e Preset":"")+" na tela da GrandMA2. Nenhum Go foi executado.");
+      await readGrandmaCatalog();
     } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
   };
 
@@ -599,8 +649,8 @@ export function App() {
         {grandmaResponse && <pre className="importbox" style={{whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto"}}>{grandmaResponse}</pre>}
         <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
         
-        <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" onClick={readGrandmaCatalog}>↻ Ler grupos, presets, cenas e macros</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
-        <div className="scheduler-section"><h3>Gravar uma nova cena na GrandMA2</h3><p className="hint">Primeiro prepare os aparelhos e valores desejados no Programmer da mesa. O plugin grava esses valores como Cue 1 de uma nova Sequence e atribui o nome informado.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><button className="primary" onClick={createGrandmaScene}>Gravar cena na GrandMA2</button></div>
+        <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" disabled={grandmaCatalogLoading} onClick={readGrandmaCatalog}>{grandmaCatalogLoading ? "Lendo show..." : "↻ Ler grupos, 12 tipos de preset, cenas e macros"}</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
+        <div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
