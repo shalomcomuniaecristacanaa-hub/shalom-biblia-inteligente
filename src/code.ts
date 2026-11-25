@@ -16,6 +16,21 @@ let lastBibleSnapshot = "";
 let scheduleWatchTimer: ReturnType<typeof setInterval> | undefined;
 let scheduleWatchBusy = false;
 
+
+async function callVmix(functionName: string, input?: string) {
+  const settings = await spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY) ?? {};
+  const host = String(settings.vmixIp ?? "").trim();
+  if (!host) throw new Error("Informe e salve o IP do computador vMix em Configurações.");
+  const params = new URLSearchParams();
+  params.set("Function", functionName);
+  if (input) params.set("Input", input);
+  const response = await fetch(`http://${host}:8088/api/?${params.toString()}`, { method: "GET" });
+  if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
+  const body = await response.text();
+  if (!body.trim()) throw new Error("O vMix respondeu sem conteúdo.");
+  return body;
+}
+
 async function runDueSchedules() {
   if (scheduleWatchBusy) return;
   scheduleWatchBusy = true;
@@ -453,7 +468,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
-    } else if (msg.type === "save-connection-settings") {
+    } else if (msg.type === "test-vmix-connection") {\n      const body = await callVmix("Fade");\n      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });\n    } else if (msg.type === "save-connection-settings") {
       const settings = msg.connectionSettings ?? {};
       const validateIp = (value: unknown, label: string) => {
         const ip = String(value ?? "").trim();
