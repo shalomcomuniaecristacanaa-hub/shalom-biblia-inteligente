@@ -52,7 +52,7 @@ function onData(chunk) {
   buffer = (buffer + text).slice(-65536);
   const lower = buffer.toLowerCase();
   if (!loggedIn && (/(please\s+login|login|username|user name)/i.test(buffer))) {
-    socket?.write(`Login ${config.username} ${config.password}\n`);
+    socket?.write(`Login ${config.username}${config.password ? ` ${config.password}` : ""}\n`);
     buffer = "";
     return;
   }
@@ -77,7 +77,7 @@ function connect() {
   if (connected && loggedIn && socket) return Promise.resolve();
   return new Promise((resolve, reject) => {
     closeSocket("Reconnecting");
-    if (!config.host || !config.password) return reject(new Error("Configure IP e senha primeiro."));
+    if (!config.host) return reject(new Error("Configure o IP da GrandMA2 primeiro."));
     const s = net.createConnection({ host: config.host, port: config.port });
     socket = s;
     loginTimer = setTimeout(() => { lastError = "Tempo esgotado aguardando autenticação Telnet."; closeSocket(lastError); reject(new Error(lastError)); }, 12000);
@@ -128,7 +128,7 @@ const server = http.createServer(async (req, res) => {
       if (!Number.isInteger(port) || port < 1 || port > 65535) return json(res, 400, { error: "Porta inválida." });
       const username = String(data.username || "administrator").trim();
       const password = String(data.password || "");
-      if (!username || !password) return json(res, 400, { error: "Usuário e senha são obrigatórios." });
+      if (!username) return json(res, 400, { error: "Informe o usuário Telnet." });
       closeSocket("Configuration changed");
       config = { host, port, username, password };
       lastError = "";
