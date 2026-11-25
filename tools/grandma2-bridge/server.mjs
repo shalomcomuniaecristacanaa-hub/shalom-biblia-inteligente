@@ -49,47 +49,50 @@ function closeSocket(reason = "Connection closed") {
 }
 function onData(chunk) {
   // grandMA2 pode dividir uma resposta em vários pacotes. Mantemos o buffer
-  // até receber o prompt completo, removendo também sequências ANSI de terminal.
-  const text = cleanTelnet(chunk).replace(/\u001b\\[[0-?]*[ -/]*[@-~]/g, "");
+  // até receber o prompt completo e removemos códigos ANSI do terminal.
+  const text = cleanTelnet(chunk).replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "");
   if (!text) return;
   buffer = (buffer + text).slice(-131072);
-  const lower = buffer.toLowerCase();
-  const promptSeen = /\\[channel\\]>\\s*$/i.test(buffer);
+  const promptSeen = /\[Channel\]>\s*$/i.test(buffer);
 
   if (!loggedIn) {
-    if (/(login\\s+incorrect|incorrect\\s+login|wrong password|login failed|access denied)/i.test(buffer)) {
+    if (/(login\s+incorrect|incorrect\s+login|wrong password|login failed|access denied)/i.test(buffer)) {
       lastError = "GrandMA2 recusou o usuário/senha. Confira as credenciais do usuário Telnet.";
-      if (connectWaiter) { const waiter = connectWaiter; connectWaiter = null; waiter.reject(new Error(lastError)); }
+      const waiter = connectWaiter;
+      connectWaiter = null;
+      if (waiter) waiter.reject(new Error(lastError));
       closeSocket(lastError);
       return;
     }
 
     // O console pode primeiro entrar como guest e só depois exibir o prompt.
     // Enviamos o login uma única vez por conexão.
-    if (!loginSent && (/(please\\s+login|username|user name)/i.test(buffer) || promptSeen)) {
+    if (!loginSent && (/(please\s+login|username|user name)/i.test(buffer) || promptSeen)) {
       loginSent = true;
-      socket?.write(`Login ${config.username}${config.password ? ` ${config.password}` : ""}\\n`);
+      socket?.write("Login " + config.username + (config.password ? " " + config.password : "") + "\n");
       buffer = "";
       return;
     }
 
-    // Não considerar qualquer prompt como autenticação: o prompt de guest
-    // também existe. Exigimos a confirmação explícita do usuário autenticado.
-    const authenticatedAs = new RegExp("logged\\\\s+in\\\\s+as\\\\s+user\\\\s+['\\\"]?" + config.username.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&") + "['\\\"]?", "i");
-    if (authenticatedAs.test(buffer) && promptSeen) {
+    // O prompt de guest não comprova autenticação. Exigimos a identificação
+    // explícita do usuário configurado antes de liberar comandos.
+    const authMatch = buffer.match(/logged\s+in\s+as\s+user\s+['"]?([^'"\r\n]+)/i);
+    if (authMatch && authMatch[1].trim().toLowerCase() === config.username.toLowerCase() && promptSeen) {
       loggedIn = true;
       connected = true;
       if (loginTimer) clearTimeout(loginTimer);
       loginTimer = null;
       buffer = "";
-      if (connectWaiter) { const waiter = connectWaiter; connectWaiter = null; waiter.resolve(); }
+      const waiter = connectWaiter;
+      connectWaiter = null;
+      if (waiter) waiter.resolve();
     }
     return;
   }
 
   if (promptSeen && pending.length) {
     const p = pending.shift();
-    const response = buffer.replace(/\\[Channel\\]>\\s*$/i, "").trim();
+    const response = buffer.replace(/\[Channel\]>\s*$/i, "").trim();
     buffer = "";
     p.resolve(response);
   }
@@ -104,8 +107,10 @@ function connect() {
     loginSent = false;
     loginTimer = setTimeout(() => {
       lastError = "Tempo esgotado aguardando autenticação Telnet. Confira IP, porta, usuário e senha.";
+      const waiter = connectWaiter;
+      connectWaiter = null;
       closeSocket(lastError);
-      reject(new Error(lastError));
+      if (waiter) waiter.reject(new Error(lastError));
     }, 20000);
     connectWaiter = {
       resolve: () => { if (loginTimer) clearTimeout(loginTimer); loginTimer = null; connected = true; loggedIn = true; resolve(); },
@@ -135,7 +140,7 @@ function connect() {
 }
 function send(command) {
   if (!connected || !loggedIn || !socket) throw new Error("Conecte e autentique na GrandMA2 primeiro.");
-  if (/[\\r\\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
+  if (/[\r\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
   return new Promise((resolve, reject) => {
     const entry = { resolve, reject };
     const timer = setTimeout(() => {
@@ -146,7 +151,7 @@ function send(command) {
     entry.resolve = value => { clearTimeout(timer); resolve(value); };
     entry.reject = error => { clearTimeout(timer); reject(error); };
     pending.push(entry);
-    socket.write(command + "\\n");
+    socket.write(command + "\n");
   });
 }
 function json(res, status, body) {
