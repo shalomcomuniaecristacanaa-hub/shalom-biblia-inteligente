@@ -94,7 +94,7 @@ async function runDueSchedules() {
             let parsed: URL;
             try { parsed = new URL(String(schedule.youtubeUrl).trim()); }
             catch { throw new Error("URL do YouTube inválida."); }
-            if (parsed.protocol !== "https:" || !/(^|\\.)youtube\\.com$|(^|\\.)youtu\\.be$/.test(parsed.hostname)) {
+            if (parsed.protocol !== "https:" || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(parsed.hostname)) {
               throw new Error("Informe um endereço HTTPS válido do YouTube.");
             }
             // This confirms that the request was handed to the UI, not that a browser completed playback.
