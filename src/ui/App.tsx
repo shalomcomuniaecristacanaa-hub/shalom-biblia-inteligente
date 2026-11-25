@@ -5,6 +5,7 @@ type Verse = { id: string; reference: string; text: string; group: string; backg
 type Output = { index: number; name?: string };
 type Layer = { index: number; name?: string };
 type ConnectionSettings = { grandmaIp: string; vmixIp: string; vmixPort: string | number };
+type ManagedDevice = { id: string; name: string; kind: "vmix" | "agent" | "other"; host: string; port: number; healthPath: string; enabled: boolean; lastStatus?: "online" | "offline" | "unknown"; lastCheckedAt?: string; lastError?: string };
 type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string; grandmaPositionPreset?: string };
 type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
 const defaultLightingGroups = (): LightingGroup[] => [
@@ -94,6 +95,8 @@ export function App() {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
+  const [managedDevices, setManagedDevices] = useState<ManagedDevice[]>([]);
+  const [deviceDraft, setDeviceDraft] = useState({ name: "", kind: "other" as ManagedDevice["kind"], host: "", port: "17843", healthPath: "/health" });
   const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
   const [grandmaTelnetPort, setGrandmaTelnetPort] = useState("30000");
   const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");
@@ -362,7 +365,7 @@ export function App() {
       if (m.type === "vmix-status-result") { setVmixStatus(m.message); }
       if (m.type === "open-youtube-url") { try { const opened = window.open(String(m.url), "_blank", "noopener,noreferrer"); if (!opened) setNotice("O navegador bloqueou a abertura automática do YouTube. Libere pop-ups para o SPresenter ou abra o link manualmente: " + String(m.url)); else setNotice("Solicitada abertura do YouTube no navegador."); } catch { setNotice("Não foi possível abrir o YouTube automaticamente. Link: " + String(m.url)); } }
       if (m.type === "state") {
-        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
+        setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setManagedDevices(m.managedDevices ?? []); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
         const content = ls.find(l => /conte[uú]do/i.test(l.name ?? ""));
         const bg = ls.find(l => /fundo|background/i.test(l.name ?? ""));
@@ -869,7 +872,33 @@ export function App() {
       <button className="primary" onClick={() => postMessage({ type: "save-group-backgrounds", groupBackgrounds })}>Salvar imagens padrão</button>
     </section>
     <section className="card">
-      <small>REDE E EQUIPAMENTOS</small><h2>Endereços dos equipamentos</h2>
+      <small>REDE E EQUIPAMENTOS</small><h2>Gerenciador de dispositivos</h2>
+      <p className="hint">Cadastre computadores e serviços HTTP da rede local. O teste consulta somente o endpoint de saúde configurado; não envia comandos de operação. Use IP privado e um serviço que ofereça uma rota GET de saúde.</p>
+      <div className="importbox">
+        <strong>Novo equipamento / computador</strong>
+        <label>Nome<input value={deviceDraft.name} onChange={e=>setDeviceDraft(v=>({...v,name:e.target.value}))} placeholder="Ex.: Computador vMix" /></label>
+        <div className="twocol">
+          <label>Tipo<select value={deviceDraft.kind} onChange={e=>setDeviceDraft(v=>({...v,kind:e.target.value as ManagedDevice["kind"]}))}><option value="vmix">vMix</option><option value="agent">Agente Shalom</option><option value="other">Outro serviço</option></select></label>
+          <label>IP privado<input value={deviceDraft.host} onChange={e=>setDeviceDraft(v=>({...v,host:e.target.value.trim()}))} placeholder="192.168.1.60" inputMode="decimal" /></label>
+        </div>
+        <div className="twocol">
+          <label>Porta HTTP<input type="number" min="1" max="65535" value={deviceDraft.port} onChange={e=>setDeviceDraft(v=>({...v,port:e.target.value}))} /></label>
+          <label>Rota de saúde<input value={deviceDraft.healthPath} onChange={e=>setDeviceDraft(v=>({...v,healthPath:e.target.value}))} placeholder="/health" /></label>
+        </div>
+        <button className="primary" disabled={!deviceDraft.name.trim() || !deviceDraft.host.trim() || !deviceDraft.port} onClick={()=>{
+          const device: ManagedDevice={id:"device-"+Date.now().toString(36),name:deviceDraft.name.trim(),kind:deviceDraft.kind,host:deviceDraft.host.trim(),port:Number(deviceDraft.port),healthPath:deviceDraft.healthPath.trim()||"/health",enabled:true};
+          const next=[...managedDevices,device]; setManagedDevices(next); postMessage({type:"save-managed-devices",devices:next}); setDeviceDraft({name:"",kind:"other",host:"",port:"17843",healthPath:"/health"});
+        }}>Adicionar equipamento</button>
+      </div>
+      <div className="saved-schedules">
+        <h3>Equipamentos cadastrados · {managedDevices.length}</h3>
+        {managedDevices.length ? managedDevices.map(device=><div className="saved-schedule" key={device.id}>
+          <div><strong>{device.name}</strong><small>{device.kind==="vmix"?"vMix":device.kind==="agent"?"Agente Shalom":"Outro serviço"} · {device.host}:{device.port}{device.healthPath}</small><small>Status: {device.lastStatus==="online"?"Online":device.lastStatus==="offline"?"Sem resposta":"Ainda não testado"}{device.lastCheckedAt?" · "+new Date(device.lastCheckedAt).toLocaleString("pt-BR"):""}</small>{device.lastError&&<small className="hint">{device.lastError}</small>}</div>
+          <div className="actions"><button className="ghost" onClick={()=>postMessage({type:"test-managed-device",id:device.id})}>Testar</button><button className="danger" onClick={()=>{const next=managedDevices.filter(item=>item.id!==device.id);setManagedDevices(next);postMessage({type:"save-managed-devices",devices:next});}}>Excluir</button></div>
+        </div>) : <p className="hint">Nenhum equipamento adicional cadastrado.</p>}
+      </div>
+      <p className="hint">Segurança: o gerenciador aceita somente IPv4 privados (10.x, 172.16–31.x e 192.168.x), limita a consulta a 4 segundos e não envia credenciais. A ponte PowerPoint atual continua local em 127.0.0.1; para controlá-la a partir de outro computador será necessário instalar um agente autenticado no computador do PowerPoint.</p>
+      <h2>Conexões diretas atuais</h2>
       <p className="hint">Cadastre os IPs atuais. Como a rede usa DHCP, se algum endereço mudar, atualize aqui e salve novamente. O endereço 10.0.0.2 da interface Art-Net não deve ser colocado como IP da mesa, a menos que seja realmente o IP de controle da GrandMA2.</p>
       <label>IP da mesa GrandMA2 / computador grandMA2 onPC
         <input value={connectionSettings.grandmaIp} onChange={e => setConnectionSettings(v => ({...v, grandmaIp:e.target.value.trim()}))} placeholder="Ex.: 192.168.1.50" inputMode="decimal" />
