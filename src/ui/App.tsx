@@ -86,7 +86,8 @@ export function App() {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [connectionSettings, setConnectionSettings] = useState<ConnectionSettings>(blankConnections());
-  const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });\n  const [grandmaTelnetPort, setGrandmaTelnetPort] = useState("30000");
+  const [grandmaTelnet, setGrandmaTelnet] = useState({ username: "", password: "" });
+  const [grandmaTelnetPort, setGrandmaTelnetPort] = useState("30000");
   const [grandmaBridgeStatus, setGrandmaBridgeStatus] = useState("Ponte local não testada");
   const [grandmaCommand, setGrandmaCommand] = useState("List Group Thru 10");
   const [grandmaResponse, setGrandmaResponse] = useState("");
@@ -106,7 +107,9 @@ export function App() {
   const configureGrandmaBridge = async () => {
     try {
       if (!connectionSettings.grandmaIp.trim() || !grandmaTelnet.password) throw new Error("Informe o IP da GrandMA2 e a senha Telnet.");
-      await bridgeRequest("/configure", { host: connectionSettings.grandmaIp.trim(), port: 30000, username: grandmaTelnet.username.trim() || "administrator", password: grandmaTelnet.password });
+      const port = Number(grandmaTelnetPort);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Informe uma porta Telnet válida.");
+      await bridgeRequest("/configure", { host: connectionSettings.grandmaIp.trim(), port, username: grandmaTelnet.username.trim() || "administrator", password: grandmaTelnet.password });
       setGrandmaBridgeStatus("Credenciais configuradas na ponte local (em memória).");
       setNotice("Configuração Telnet enviada à ponte local.");
     } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
@@ -580,6 +583,7 @@ export function App() {
       <details className="importbox" style={{marginTop:14}}>
         <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
         <p className="hint">A ponte local precisa estar iniciada no computador que executa o SPresenter. A senha é enviada somente à ponte e fica em memória enquanto o processo estiver rodando.</p>
+        <label>Porta Telnet<input value={grandmaTelnetPort} onChange={e => setGrandmaTelnetPort(e.target.value)} inputMode="numeric" placeholder="30000" /></label>
         <label>Usuário Telnet
           <input autoComplete="username" value={grandmaTelnet.username} onChange={e => setGrandmaTelnet(v => ({...v, username:e.target.value}))} placeholder="Usuário dedicado da GrandMA2" />
         </label>
