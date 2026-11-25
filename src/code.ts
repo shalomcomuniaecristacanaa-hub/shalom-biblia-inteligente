@@ -201,7 +201,8 @@ async function sendState() {
     spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY),
     spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY),
     spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY),
-    spresenter.storage.get<any[]>(LIGHTING_SCENES_KEY)
+    spresenter.storage.get<any[]>(LIGHTING_SCENES_KEY),
+    spresenter.storage.get<ManagedDevice[]>(MANAGED_DEVICES_KEY)
   ]);
   spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [], managedDevices: managedDevices ?? [] });
 }
