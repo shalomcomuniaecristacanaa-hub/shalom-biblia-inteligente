@@ -41,8 +41,13 @@ async function runDueSchedules() {
       if (schedule.coverGuid) {
         await runStep("spresenterMedia", () => presentLibraryBackground({ type: "present-library-background", guid: schedule.coverGuid, output: schedule.output ?? "0", backgroundLayer: Number(schedule.backgroundLayer ?? 1) }));
       }
-      if (schedule.song) {
-        await runStep("youtube", async () => { throw new Error("A execução automática do YouTube ainda não está conectada ao SPresenter/navegador."); });
+      if (schedule.youtubeUrl) {
+        await runStep("youtube", async () => {
+          let parsed: URL;
+          try { parsed = new URL(String(schedule.youtubeUrl).trim()); } catch { throw new Error("URL do YouTube inválida."); }
+          if (parsed.protocol !== "https:" || !/(^|\\.)youtube\\.com$|(^|\\.)youtu\\.be$/.test(parsed.hostname)) throw new Error("Informe um endereço HTTPS válido do YouTube.");
+          spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
+        });
       }
       if (schedule.grandmaCommand) {
         await runStep("grandma2", async () => { throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador."); });
