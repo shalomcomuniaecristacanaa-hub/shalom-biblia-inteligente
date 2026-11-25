@@ -51,19 +51,19 @@ function onData(chunk) {
   if (!text) return;
   buffer = (buffer + text).slice(-65536);
   const lower = buffer.toLowerCase();
-  if (!loggedIn && (/(please\\s+login|login|username|user name)/i.test(buffer))) {
+  if (!loggedIn && (/(please\s+login|login|username|user name)/i.test(buffer))) {
     socket?.write(`Login ${config.username} ${config.password}\n`);
     buffer = "";
     return;
   }
-  if (/\\[Channel\\]>/i.test(buffer)) {
+  if (/\[Channel\]>/i.test(buffer)) {
     loggedIn = true;
     if (loginTimer) clearTimeout(loginTimer);
     loginTimer = null;
     if (connectWaiter) { connectWaiter.resolve(); connectWaiter = null; }
     if (pending.length) {
       const p = pending.shift();
-      const response = buffer.replace(/\\[Channel\\]>\\s*$/i, "").trim();
+      const response = buffer.replace(/\[Channel\]>\s*$/i, "").trim();
       buffer = "";
       p.resolve(response);
     }
@@ -93,7 +93,7 @@ function connect() {
 }
 function send(command) {
   if (!connected || !loggedIn || !socket) throw new Error("Conecte e autentique na GrandMA2 primeiro.");
-  if (/[\\r\\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
+  if (/[\r\n]/.test(command)) throw new Error("Envie apenas um comando por vez.");
   return new Promise((resolve, reject) => {
     const entry = { resolve, reject };
     const timer = setTimeout(() => {
@@ -123,7 +123,7 @@ const server = http.createServer(async (req, res) => {
     const data = body ? JSON.parse(body) : {};
     if (url.pathname === "/configure") {
       const host = String(data.host || "").trim();
-      if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host)) return json(res, 400, { error: "Informe um endereço IPv4 válido." });
+      if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)) return json(res, 400, { error: "Informe um endereço IPv4 válido." });
       const port = Number(data.port || 30000);
       if (!Number.isInteger(port) || port < 1 || port > 65535) return json(res, 400, { error: "Porta inválida." });
       const username = String(data.username || "administrator").trim();
