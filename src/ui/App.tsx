@@ -305,7 +305,10 @@ export function App() {
   useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
-      if (m.type === "vmix-test-result") { setVmixStatus(m.success ? m.message : (m.message || "Falha no teste")); }\n      if (m.type === "vmix-action-result") { setVmixStatus(m.message); }\n      if (m.type === "vmix-status-result") { setVmixStatus(m.message); }\n      if (m.type === "open-youtube-url") { try { const opened = window.open(String(m.url), "_blank", "noopener,noreferrer"); if (!opened) setNotice("O navegador bloqueou a abertura automática do YouTube. Libere pop-ups para o SPresenter ou abra o link manualmente: " + String(m.url)); else setNotice("Solicitada abertura do YouTube no navegador."); } catch { setNotice("Não foi possível abrir o YouTube automaticamente. Link: " + String(m.url)); } }
+      if (m.type === "vmix-test-result") { setVmixStatus(m.success ? m.message : (m.message || "Falha no teste")); }
+      if (m.type === "vmix-action-result") { setVmixStatus(m.message); }
+      if (m.type === "vmix-status-result") { setVmixStatus(m.message); }
+      if (m.type === "open-youtube-url") { try { const opened = window.open(String(m.url), "_blank", "noopener,noreferrer"); if (!opened) setNotice("O navegador bloqueou a abertura automática do YouTube. Libere pop-ups para o SPresenter ou abra o link manualmente: " + String(m.url)); else setNotice("Solicitada abertura do YouTube no navegador."); } catch { setNotice("Não foi possível abrir o YouTube automaticamente. Link: " + String(m.url)); } }
       if (m.type === "state") {
         setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
