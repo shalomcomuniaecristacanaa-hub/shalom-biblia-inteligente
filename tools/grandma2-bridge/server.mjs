@@ -80,6 +80,7 @@ function onData(chunk) {
     if (authMatch && authMatch[1].trim().toLowerCase() === config.username.toLowerCase() && promptSeen) {
       loggedIn = true;
       connected = true;
+      lastError = "";
       if (loginTimer) clearTimeout(loginTimer);
       loginTimer = null;
       buffer = "";
@@ -94,6 +95,7 @@ function onData(chunk) {
     const p = pending.shift();
     const response = buffer.replace(/\[Channel\]>\s*$/i, "").trim();
     buffer = "";
+    lastError = "";
     p.resolve(response);
   }
 }
@@ -187,7 +189,9 @@ const server = http.createServer(async (req, res) => {
       if (!command) return json(res, 400, { error: "Comando obrigatório." });
       if (command.length > 240) return json(res, 400, { error: "Comando muito longo." });
       if (!connected || !loggedIn) await connect();
-      return json(res, 200, { response: await send(command) });
+      const response = await send(command);
+      lastError = "";
+      return json(res, 200, { response });
     }
     if (url.pathname === "/disconnect") { closeSocket(); config.password = ""; return json(res, 200, { disconnected: true }); }
     return json(res, 404, { error: "Not found" });
