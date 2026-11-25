@@ -22,9 +22,9 @@ async function callVmix(functionName: string, input?: string) {
   const host = String(settings.vmixIp ?? "").trim();
   if (!host) throw new Error("Informe e salve o IP do computador vMix em Configurações.");
   const params = new URLSearchParams();
-  params.set("Function", functionName);
+  if (functionName) params.set("Function", functionName);
   if (input) params.set("Input", input);
-  const response = await fetch(`http://${host}:8088/api/?${params.toString()}`, { method: "GET" });
+  const query = params.toString();\n  const response = await fetch(`http://${host}:8088/api/${query ? "?" + query : ""}`, { method: "GET" });
   if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
   const body = await response.text();
   if (!body.trim()) throw new Error("O vMix respondeu sem conteúdo.");
@@ -68,7 +68,7 @@ async function runDueSchedules() {
         await runStep("grandma2", async () => { throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador."); });
       }
       if (schedule.vmixFunction || schedule.startStream) {
-        await runStep("vmix", async () => { throw new Error("O envio de comandos vMix ainda não está conectado ao agendador."); });
+        await runStep("vmix", async () => {\n          if (schedule.vmixFunction) {\n            const parts = String(schedule.vmixFunction).split(",").map((part: string) => part.trim());\n            await callVmix(parts[0], parts[1]);\n          }\n          if (schedule.startStream) await callVmix("StartStreaming");\n        });
       }
       schedule.stepResults = results;
       schedule.executedAt = new Date().toISOString();
@@ -468,7 +468,7 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
-    } else if (msg.type === "test-vmix-connection") {\n      const body = await callVmix("Fade");\n      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });\n    } else if (msg.type === "save-connection-settings") {
+    } else if (msg.type === "test-vmix-connection") {\n      const body = await callVmix("");\n      spresenter.ui.postMessage({ type: "vmix-test-result", success: true, message: "Resposta recebida do vMix." });\n    } else if (msg.type === "save-connection-settings") {
       const settings = msg.connectionSettings ?? {};
       const validateIp = (value: unknown, label: string) => {
         const ip = String(value ?? "").trim();
