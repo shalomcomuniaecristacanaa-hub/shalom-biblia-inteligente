@@ -99,6 +99,9 @@ export function App() {
   const [grandmaSavePreset, setGrandmaSavePreset] = useState(false);
   const [grandmaCatalogLoading, setGrandmaCatalogLoading] = useState(false);
   const [grandmaSelectedLightingSceneId, setGrandmaSelectedLightingSceneId] = useState("");
+  const [grandmaImportedXmlName, setGrandmaImportedXmlName] = useState("");
+  const [grandmaImportedObjects, setGrandmaImportedObjects] = useState<{kind:string;name:string;number:string}[]>([]);
+  const [grandmaImportStatus, setGrandmaImportStatus] = useState("");
   const bridgeRequest = async (path: string, body?: unknown) => {
     const response = await fetch("http://127.0.0.1:17842" + path, {
       method: body === undefined ? "GET" : "POST",
@@ -210,6 +213,39 @@ export function App() {
   const [lightingName, setLightingName] = useState("Nova cena");
   const [lightingPreset, setLightingPreset] = useState("custom");
   const [lightingTransition, setLightingTransition] = useState(3);
+
+  const importGrandmaXml = async (file?: File) => {
+    if (!file) return;
+    if (!/\\.xml$/i.test(file.name)) { setGrandmaImportStatus("Selecione um arquivo XML exportado pela GrandMA2. Arquivos .show completos ainda não são importados diretamente."); return; }
+    if (file.size > 10 * 1024 * 1024) { setGrandmaImportStatus("O XML deve ter até 10 MB para análise no plugin."); return; }
+    try {
+      const source = await file.text();
+      if (!source.trim() || /<!DOCTYPE|<!ENTITY/i.test(source)) throw new Error("XML vazio ou com declarações externas não permitidas.");
+      const documentXml = new DOMParser().parseFromString(source, "application/xml");
+      if (documentXml.querySelector("parsererror")) throw new Error("O arquivo não contém um XML válido.");
+      const relevant = /group|preset|sequence|cue|macro|effect|executor|fixture/i;
+      const found: {kind:string;name:string;number:string}[] = [];
+      for (const element of Array.from(documentXml.getElementsByTagName("*"))) {
+        const tag = element.tagName.split(":").pop() || element.tagName;
+        if (!relevant.test(tag)) continue;
+        const attrs = element as Element;
+        const childName = Array.from(element.children).find(child => /^name$/i.test(child.tagName.split(":").pop() || child.tagName));
+        const name = attrs.getAttribute("name") || attrs.getAttribute("Name") || childName?.textContent?.trim() || "";
+        const number = attrs.getAttribute("number") || attrs.getAttribute("Number") || attrs.getAttribute("no") || attrs.getAttribute("No") || attrs.getAttribute("id") || attrs.getAttribute("ID") || "";
+        if (name || number) found.push({kind:tag,name:name || "(sem nome)",number});
+        if (found.length >= 500) break;
+      }
+      setGrandmaImportedXmlName(file.name);
+      setGrandmaImportedObjects(found);
+      setGrandmaImportStatus(found.length
+        ? "Leitura concluída: "+found.length+" referências encontradas. Confira a prévia; nenhum dado foi enviado ou gravado na mesa."
+        : "XML válido, mas não encontrei objetos reconhecíveis. Exporte os objetos pelo menu XML da GrandMA2 e tente novamente.");
+    } catch (error) {
+      setGrandmaImportedXmlName("");
+      setGrandmaImportedObjects([]);
+      setGrandmaImportStatus(error instanceof Error ? error.message : "Falha ao analisar o XML.");
+    }
+  };
 
   const sendSavedLightingSceneToGrandma = async () => {
     const scene = lightingScenes.find(item => item.id === grandmaSelectedLightingSceneId);
@@ -706,6 +742,15 @@ export function App() {
         <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
         
         <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" disabled={grandmaCatalogLoading} onClick={readGrandmaCatalog}>{grandmaCatalogLoading ? "Lendo show..." : "↻ Ler grupos, 12 tipos de preset, cenas e macros"}</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
+        <div className="scheduler-section"><h3>Importar biblioteca / XML da GrandMA2</h3>
+          <p className="hint">Importe um XML exportado da GrandMA2 para identificar Groups, Presets, Sequences, Cues, Macros e Effects. A importação faz uma leitura local e mostra uma prévia; não altera o show nem envia comandos à mesa.</p>
+          <label>Arquivo XML da GrandMA2<input type="file" accept=".xml,text/xml,application/xml" onChange={e => { void importGrandmaXml(e.target.files?.[0]); e.currentTarget.value = ""; }} /></label>
+          {grandmaImportStatus && <p className="hint">{grandmaImportStatus}</p>}
+          {grandmaImportedXmlName && <><strong>{grandmaImportedXmlName}</strong><p className="hint">{grandmaImportedObjects.length} itens identificados (limite de prévia: 500).</p>
+            {grandmaImportedObjects.length > 0 && <div className="importbox" style={{maxHeight:260,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={{textAlign:"left"}}>Tipo</th><th style={{textAlign:"left"}}>Nome</th><th style={{textAlign:"left"}}>Nº / ID</th></tr></thead><tbody>{grandmaImportedObjects.slice(0,120).map((item,index)=><tr key={index}><td>{item.kind}</td><td>{item.name}</td><td>{item.number}</td></tr>)}</tbody></table>{grandmaImportedObjects.length>120 && <p className="hint">Mostrando os primeiros 120 itens.</p>}</div>}
+          </>}
+          <p className="hint">Para obter o XML, use a função de exportação XML da GrandMA2 e escolha os objetos desejados. Arquivos .show completos, binários ou pacotes ZIP ainda precisam de um conversor específico; não serão tratados como XML.</p>
+        </div>
         <div className="scheduler-section"><h3>Enviar uma cena salva do Estúdio de Iluminação</h3><p className="hint">Selecione uma cena já montada no plugin. Os grupos precisam ter o número correspondente de Group na GrandMA2 configurado no Estúdio. A transferência aplica intensidade e cor no Programmer e grava uma Cue 1 em uma Sequence nova.</p><label>Cena salva<select value={grandmaSelectedLightingSceneId} onChange={e=>{setGrandmaSelectedLightingSceneId(e.target.value);const selected=lightingScenes.find(scene=>scene.id===e.target.value);if(selected){setGrandmaSceneName(selected.name);}}}><option value="">Selecione uma cena...</option>{lightingScenes.map(scene=><option key={scene.id} value={scene.id}>{scene.name}</option>)}</select></label><label>Número da Sequence para gravar<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric"/></label><button className="primary" disabled={!lightingScenes.length} onClick={sendSavedLightingSceneToGrandma}>Enviar cena selecionada para GrandMA2</button><p className="hint">A prévia do plugin é apenas uma simulação. Movimento, onda, ciclo, pulso, perseguição e estrobo ainda exigem programação de efeitos/presets na GrandMA2; não serão simulados como se já estivessem programados.</p></div><div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
