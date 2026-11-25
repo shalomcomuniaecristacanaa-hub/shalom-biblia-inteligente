@@ -106,7 +106,7 @@ export function App() {
   };
   const configureGrandmaBridge = async () => {
     try {
-      if (!connectionSettings.grandmaIp.trim() || !grandmaTelnet.password) throw new Error("Informe o IP da GrandMA2 e a senha Telnet.");
+      if (!connectionSettings.grandmaIp.trim()) throw new Error("Informe o IP da GrandMA2.");
       const port = Number(grandmaTelnetPort);
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Informe uma porta Telnet válida.");
       await bridgeRequest("/configure", { host: connectionSettings.grandmaIp.trim(), port, username: grandmaTelnet.username.trim() || "administrator", password: grandmaTelnet.password });
@@ -582,13 +582,13 @@ export function App() {
       <div className="actions"><button className="primary" onClick={() => postMessage({type:"save-connection-settings", connectionSettings})}>Salvar endereços</button><button className="ghost" onClick={() => setConnectionSettings(blankConnections())}>Limpar campos</button></div>
       <details className="importbox" style={{marginTop:14}}>
         <summary style={{cursor:"pointer",fontWeight:700}}>Configurar acesso Telnet da GrandMA2</summary>
-        <p className="hint">A ponte local precisa estar iniciada no computador que executa o SPresenter. A senha é enviada somente à ponte e fica em memória enquanto o processo estiver rodando.</p>
+        <p className="hint">A ponte local precisa estar iniciada no computador que executa o SPresenter. A senha é opcional e, quando informada, é enviada somente à ponte e fica em memória enquanto o processo estiver rodando.</p>
         <label>Porta Telnet<input value={grandmaTelnetPort} onChange={e => setGrandmaTelnetPort(e.target.value)} inputMode="numeric" placeholder="30000" /></label>
         <label>Usuário Telnet
           <input autoComplete="username" value={grandmaTelnet.username} onChange={e => setGrandmaTelnet(v => ({...v, username:e.target.value}))} placeholder="Usuário dedicado da GrandMA2" />
         </label>
         <label>Senha Telnet
-          <input type="password" autoComplete="current-password" value={grandmaTelnet.password} onChange={e => setGrandmaTelnet(v => ({...v, password:e.target.value}))} placeholder="Senha do usuário Telnet" />
+          <input type="password" autoComplete="current-password" value={grandmaTelnet.password} onChange={e => setGrandmaTelnet(v => ({...v, password:e.target.value}))} placeholder="Senha (opcional, se o usuário não tiver senha)" />
         </label>
         <div className="actions"><button className="primary" onClick={configureGrandmaBridge}>Configurar ponte local</button><button className="ghost" onClick={testGrandmaBridge}>Testar conexão</button></div>
         <p className="hint">Status: {grandmaBridgeStatus}</p>
