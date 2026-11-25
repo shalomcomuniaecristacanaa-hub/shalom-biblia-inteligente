@@ -1,5 +1,51 @@
 (function() {
   "use strict";
+  async function runSequentialAutomation(options) {
+    const now = options.now ?? (() => /* @__PURE__ */ new Date());
+    const checkpoint = {
+      ...options.checkpoint,
+      status: "running",
+      currentStep: options.checkpoint.currentStep ?? null,
+      stepResults: { ...options.checkpoint.stepResults }
+    };
+    for (const step of options.steps) {
+      if (checkpoint.stepResults[step.id]?.status === "success") continue;
+      const startedAt = now().toISOString();
+      checkpoint.currentStep = step.id;
+      checkpoint.pauseReason = void 0;
+      checkpoint.pausedAt = void 0;
+      checkpoint.stepResults[step.id] = { status: "running", startedAt };
+      await options.persist({ ...checkpoint, stepResults: { ...checkpoint.stepResults } });
+      try {
+        await step.execute();
+        checkpoint.stepResults[step.id] = {
+          status: "success",
+          startedAt,
+          finishedAt: now().toISOString()
+        };
+        await options.persist({ ...checkpoint, stepResults: { ...checkpoint.stepResults } });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        checkpoint.stepResults[step.id] = {
+          status: "failed",
+          startedAt,
+          finishedAt: now().toISOString(),
+          error: message
+        };
+        checkpoint.status = "paused";
+        checkpoint.pauseReason = `Etapa "${step.label}" falhou: ${message}`;
+        checkpoint.pausedAt = now().toISOString();
+        await options.persist({ ...checkpoint, stepResults: { ...checkpoint.stepResults } });
+        return checkpoint;
+      }
+    }
+    checkpoint.status = "completed";
+    checkpoint.currentStep = null;
+    checkpoint.pauseReason = void 0;
+    checkpoint.completedAt = now().toISOString();
+    await options.persist({ ...checkpoint, stepResults: { ...checkpoint.stepResults } });
+    return checkpoint;
+  }
   const STORE_KEY = "shalom.verses.v1";
   const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
   const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
@@ -34,63 +80,113 @@
     scheduleWatchBusy = true;
     try {
       const schedules = await spresenter.storage.get(EVENT_SCHEDULES_KEY) ?? [];
-      const now = Date.now();
       let changed = false;
       for (const schedule of schedules) {
-        if (!schedule?.enabled || schedule.executedAt || !schedule.date || !schedule.time) continue;
-        const dueAt = (/* @__PURE__ */ new Date(schedule.date + "T" + schedule.time)).getTime();
-        if (!Number.isFinite(dueAt) || dueAt > now) continue;
-        const results = schedule.stepResults ?? {};
-        const runStep = async (key, action) => {
-          if (results[key]) return;
-          const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-          try {
-            await action();
-            results[key] = { status: "success", startedAt, finishedAt: (/* @__PURE__ */ new Date()).toISOString(), error: "" };
-          } catch (error) {
-            results[key] = { status: "failed", startedAt, finishedAt: (/* @__PURE__ */ new Date()).toISOString(), error: error instanceof Error ? error.message : String(error) };
-          }
-        };
+        if (schedule?.automationStatus !== "running") continue;
+        const runningStep = Object.entries(schedule.stepResults ?? {}).find(([, result]) => result?.status === "running");
+        if (!runningStep) continue;
+        schedule.automationStatus = "paused";
+        schedule.pauseReason = "O SPresenter foi reiniciado durante uma etapa. Confira o equipamento antes de retomar.";
+        schedule.pausedAt = (/* @__PURE__ */ new Date()).toISOString();
+        changed = true;
+      }
+      if (changed) await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+      const pausedEvent = schedules.find((item) => item?.enabled && item.automationStatus === "paused");
+      if (pausedEvent) {
+        if (changed) await sendState();
+        return;
+      }
+      const now = Date.now();
+      const dueSchedules = schedules.filter((schedule) => schedule?.enabled && !schedule.executedAt && schedule.automationStatus !== "completed" && schedule.date && schedule.time).map((schedule) => ({ schedule, dueAt: (/* @__PURE__ */ new Date(schedule.date + "T" + schedule.time)).getTime() })).filter((item) => Number.isFinite(item.dueAt) && item.dueAt <= now).sort((a, b) => a.dueAt - b.dueAt);
+      for (const item of dueSchedules) {
+        const schedule = item.schedule;
+        const steps = [];
         if (schedule.coverGuid) {
-          await runStep("spresenterMedia", () => presentLibraryBackground({ type: "present-library-background", guid: schedule.coverGuid, output: schedule.output ?? "0", backgroundLayer: Number(schedule.backgroundLayer ?? 1) }));
+          steps.push({
+            id: "spresenterMedia",
+            label: "Conteúdo do ProPresenter",
+            execute: () => presentLibraryBackground({
+              type: "present-library-background",
+              guid: schedule.coverGuid,
+              output: schedule.output ?? "0",
+              backgroundLayer: Number(schedule.backgroundLayer ?? 1)
+            })
+          });
         }
         if (schedule.youtubeUrl) {
-          await runStep("youtube", async () => {
-            let parsed;
-            try {
-              parsed = new URL(String(schedule.youtubeUrl).trim());
-            } catch {
-              throw new Error("URL do YouTube inválida.");
+          steps.push({
+            id: "youtube",
+            label: "Abrir URL do YouTube",
+            execute: async () => {
+              let parsed;
+              try {
+                parsed = new URL(String(schedule.youtubeUrl).trim());
+              } catch {
+                throw new Error("URL do YouTube inválida.");
+              }
+              if (parsed.protocol !== "https:" || !/(^|\\.)youtube\\.com$|(^|\\.)youtu\\.be$/.test(parsed.hostname)) {
+                throw new Error("Informe um endereço HTTPS válido do YouTube.");
+              }
+              spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
             }
-            if (parsed.protocol !== "https:" || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(parsed.hostname)) throw new Error("Informe um endereço HTTPS válido do YouTube.");
-            spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
           });
         }
         if (schedule.grandmaCommand) {
-          await runStep("grandma2", async () => {
-            throw new Error("O envio de comandos GrandMA2 ainda não está conectado ao agendador.");
+          steps.push({
+            id: "grandma2",
+            label: "Comando GrandMA2",
+            execute: async () => {
+              throw new Error("O adaptador de execução GrandMA2 ainda não foi conectado ao motor de automação.");
+            }
           });
         }
         if (schedule.vmixFunction || schedule.startStream) {
-          await runStep("vmix", async () => {
-            if (schedule.vmixFunction) {
-              const parts = String(schedule.vmixFunction).split(",").map((part) => part.trim());
-              await callVmix(parts[0], parts[1]);
+          steps.push({
+            id: "vmix",
+            label: "Comando vMix",
+            execute: async () => {
+              if (schedule.vmixFunction) {
+                const parts = String(schedule.vmixFunction).split(",").map((part) => part.trim());
+                await callVmix(parts[0], parts[1]);
+              }
+              if (schedule.startStream) await callVmix("StartStreaming");
             }
-            if (schedule.startStream) await callVmix("StartStreaming");
           });
         }
-        schedule.stepResults = results;
-        schedule.executedAt = (/* @__PURE__ */ new Date()).toISOString();
+        const result = await runSequentialAutomation({
+          steps,
+          checkpoint: {
+            status: "running",
+            currentStep: schedule.currentStep ?? null,
+            stepResults: schedule.stepResults ?? {},
+            pauseReason: schedule.pauseReason,
+            pausedAt: schedule.pausedAt,
+            completedAt: schedule.completedAt
+          },
+          persist: async (checkpoint) => {
+            schedule.automationStatus = checkpoint.status;
+            schedule.currentStep = checkpoint.currentStep;
+            schedule.stepResults = checkpoint.stepResults;
+            schedule.pauseReason = checkpoint.pauseReason;
+            schedule.pausedAt = checkpoint.pausedAt;
+            schedule.completedAt = checkpoint.completedAt;
+            if (checkpoint.status === "completed") schedule.executedAt = checkpoint.completedAt;
+            await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+          }
+        });
         changed = true;
+        if (result.status === "paused") {
+          spresenter.ui.postMessage({
+            type: "notice",
+            message: "Automação pausada: " + (result.pauseReason || "uma etapa falhou") + " As próximas ações não foram executadas."
+          });
+          break;
+        }
       }
-      if (changed) {
-        await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
-        await sendState();
-        spresenter.ui.postMessage({ type: "notice", message: "O agendador processou um ou mais eventos. Confira o resultado de cada etapa." });
-      }
+      if (changed) await sendState();
     } catch (error) {
       console.error(PLUGIN_TAG, "Falha no agendador:", error);
+      spresenter.ui.postMessage({ type: "notice", message: "Falha interna no agendador: " + (error instanceof Error ? error.message : String(error)) });
     } finally {
       scheduleWatchBusy = false;
     }
@@ -459,6 +555,19 @@
         await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
         await sendState();
         spresenter.ui.postMessage({ type: "notice", message: "Programação salva no Shalom." });
+      } else if (msg.type === "resume-event-schedule") {
+        const schedules = await spresenter.storage.get(EVENT_SCHEDULES_KEY) ?? [];
+        const schedule = schedules.find((item) => item.id === msg.id);
+        if (!schedule) throw new Error("Programação não encontrada.");
+        if (schedule.automationStatus !== "paused") throw new Error("Esta programação não está pausada.");
+        schedule.automationStatus = "scheduled";
+        schedule.pauseReason = "";
+        schedule.pausedAt = "";
+        schedule.executedAt = "";
+        await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules);
+        await sendState();
+        spresenter.ui.postMessage({ type: "notice", message: "Retomada autorizada. A etapa que falhou será tentada novamente; confira o equipamento antes de continuar." });
+        void runDueSchedules();
       } else if (msg.type === "vmix-start-stream") {
         await callVmix("StartStreaming");
         spresenter.ui.postMessage({ type: "vmix-action-result", message: "Comando para iniciar a transmissão enviado." });
