@@ -1,4 +1,5 @@
 import { runSequentialAutomation } from "./automation/engine";
+import { normalizeDevice, probeDevice, type ManagedDevice } from "./automation/device-manager";
 type Verse = { id: string; reference: string; text: string; group: string; background: string; theme: string; book?: string };
 type UiMessage = { type: string; [key: string]: any };
 
@@ -7,6 +8,7 @@ const GROUP_BACKGROUNDS_KEY = "shalom.group-backgrounds.v1";
 const EVENT_SCHEDULES_KEY = "shalom.event-schedules.v1";
 const CONNECTION_SETTINGS_KEY = "shalom.connection-settings.v1";
 const LIGHTING_SCENES_KEY = "shalom.lighting-scenes.v1";
+const MANAGED_DEVICES_KEY = "shalom.managed-devices.v1";
 type GroupBackgrounds = { Ceia: string; Palavra: string; Dízimo: string };
 const PLUGIN_TAG = "[Shalom Bíblia]";
 const prepared = new Set<string>();
@@ -194,14 +196,14 @@ async function getVerses(): Promise<Verse[]> {
   return (await spresenter.storage.get<Verse[]>(STORE_KEY)) ?? [];
 }
 async function sendState() {
-  const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings, lightingScenes] = await Promise.all([
+  const [verses, outputs, layers, groupBackgrounds, eventSchedules, connectionSettings, lightingScenes, managedDevices] = await Promise.all([
     getVerses(), spresenter.outputs.list(), spresenter.layers.list(),
     spresenter.storage.get<GroupBackgrounds>(GROUP_BACKGROUNDS_KEY),
     spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY),
     spresenter.storage.get<any>(CONNECTION_SETTINGS_KEY),
     spresenter.storage.get<any[]>(LIGHTING_SCENES_KEY)
   ]);
-  spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [] });
+  spresenter.ui.postMessage({ type: "state", verses, outputs, layers, groupBackgrounds: groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" }, eventSchedules: eventSchedules ?? [], connectionSettings: connectionSettings ?? { grandmaIp: "", vmixIp: "" }, lightingScenes: lightingScenes ?? [], managedDevices: managedDevices ?? [] });
 }
 function stagePresentation(title: string, elementId: string) {
   return {
@@ -594,6 +596,28 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
+    } else if (msg.type === "save-managed-devices") {
+      const input = Array.isArray(msg.devices) ? msg.devices : [];
+      if (input.length > 30) throw new Error("O limite é de 30 equipamentos cadastrados.");
+      const devices = input.map(normalizeDevice);
+      if (new Set(devices.map(device => device.id)).size !== devices.length) throw new Error("Existem IDs duplicados no cadastro de equipamentos.");
+      await spresenter.storage.set(MANAGED_DEVICES_KEY, devices);
+      await sendState();
+      spresenter.ui.postMessage({ type: "notice", message: "Cadastro de equipamentos da rede salvo." });
+    } else if (msg.type === "test-managed-device") {
+      const devices = await spresenter.storage.get<ManagedDevice[]>(MANAGED_DEVICES_KEY) ?? [];
+      const device = devices.find(item => item.id === String(msg.id));
+      if (!device) throw new Error("Equipamento não encontrado.");
+      const result = await probeDevice(device);
+      const updated = devices.map(item => item.id === device.id ? {
+        ...item,
+        lastStatus: result.online ? "online" as const : "offline" as const,
+        lastCheckedAt: result.checkedAt,
+        lastError: result.error ?? ""
+      } : item);
+      await spresenter.storage.set(MANAGED_DEVICES_KEY, updated);
+      await sendState();
+      spresenter.ui.postMessage({ type: "managed-device-test-result", ...result, name: device.name });
     } else if (msg.type === "delete-event-schedule") {
       const schedules = await spresenter.storage.get<any[]>(EVENT_SCHEDULES_KEY) ?? [];
       await spresenter.storage.set(EVENT_SCHEDULES_KEY, schedules.filter((item: any) => item.id !== msg.id));
