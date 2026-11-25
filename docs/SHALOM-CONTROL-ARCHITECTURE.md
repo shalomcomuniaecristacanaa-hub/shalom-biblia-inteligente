@@ -45,6 +45,23 @@ Se o processo for encerrado enquanto uma etapa estiver `running`, a próxima ini
 - A fase 1 cria o motor e o diário de execução. As fases seguintes conectam GrandMA2, vMix e os demais adaptadores com confirmações específicas.
 - A ponte PowerPoint atual é local ao computador que executa o PowerPoint; o acesso distribuído será tratado pelo Device Manager sem expor serviços locais à rede indevidamente.
 
+## Fase 1 — núcleo inicial entregue no repositório
+
+- Motor reutilizável de execução sequencial em `src/automation/engine.ts`.
+- Agendador integrado ao motor: salva checkpoint antes e depois de cada ação.
+- Falha pausa o evento e impede as etapas seguintes.
+- Eventos vencidos são ordenados pelo horário e processados sem concorrência.
+- Reinicialização durante uma ação gera pausa de segurança, sem repetição automática.
+- A tela de programações mostra estado, contagem de etapas concluídas/falhas e botão de retomada explícita.
+- Retomar reenvia a etapa que falhou; o operador deve conferir o equipamento antes de autorizar, pois nem todos os protocolos atuais oferecem confirmação idempotente.
+
+### Limitações ainda abertas na fase 1
+
+- GrandMA2 ainda não possui adaptador de execução conectado ao agendador; uma etapa GrandMA2 configurada pausa com erro explícito em vez de fingir sucesso.
+- A abertura do YouTube é entregue à interface; isso confirma o encaminhamento do pedido, não a reprodução efetiva do vídeo.
+- A API vMix responde ao comando HTTP, mas a confirmação do estado real de cada ação será reforçada no adaptador específico.
+- Ainda não foi possível executar build ou ensaio com equipamentos reais nesta etapa.
+
 ## Próximas entregas
 
 1. Device Manager com perfis de computadores e testes de conexão.
