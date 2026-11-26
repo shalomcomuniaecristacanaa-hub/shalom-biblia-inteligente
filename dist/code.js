@@ -102,21 +102,79 @@
   let lastBibleSnapshot = "";
   let scheduleWatchTimer;
   let scheduleWatchBusy = false;
-  async function callVmix(functionName, input) {
+  let youtubePlaybackWaiter;
+  async function callVmix(functionName, input, expectedStreaming) {
     const settings = await spresenter.storage.get(CONNECTION_SETTINGS_KEY) ?? {};
     const host = String(settings.vmixIp ?? "").trim();
     const port = Number(settings.vmixPort ?? 8088);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Porta da API vMix inválida.");
     if (!host) throw new Error("Informe e salve o IP do computador vMix em Configurações.");
-    const params = new URLSearchParams();
-    if (functionName) params.set("Function", functionName);
-    if (input) params.set("Input", input);
-    const query = params.toString();
-    const response = await fetch(`http://${host}:${port}/api/${query ? "?" + query : ""}`, { method: "GET" });
-    if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
-    const body = await response.text();
-    if (!body.trim()) throw new Error("O vMix respondeu sem conteúdo.");
+    const request = async (fn, source) => {
+      const params = new URLSearchParams();
+      if (fn) params.set("Function", fn);
+      if (source) params.set("Input", source);
+      const query = params.toString();
+      const response = await fetch(`http://${host}:${port}/api/${query ? "?" + query : ""}`, { method: "GET", cache: "no-store" });
+      if (!response.ok) throw new Error(`vMix respondeu HTTP ${response.status}.`);
+      const body2 = await response.text();
+      if (!body2.trim()) throw new Error("O vMix respondeu sem conteúdo.");
+      return body2;
+    };
+    const body = await request(functionName, input);
+    if (expectedStreaming !== void 0) {
+      const statusXml = await request();
+      const match = statusXml.match(/<streaming>(true|false)<\/streaming>/i);
+      if (!match) throw new Error("Comando aceito, mas o XML do vMix não informou o estado de streaming.");
+      const actual = match[1].toLowerCase() === "true";
+      if (actual !== expectedStreaming) throw new Error(`O vMix respondeu, mas o streaming continua ${actual ? "ativo" : "parado"}; esperado: ${expectedStreaming ? "ativo" : "parado"}.`);
+    }
     return body;
+  }
+  async function callGrandmaScheduler(command) {
+    const settings = await spresenter.storage.get(CONNECTION_SETTINGS_KEY) ?? {};
+    const host = String(settings.grandmaIp ?? "").trim();
+    if (!host) throw new Error("Configure e salve o IP da GrandMA2 antes de agendar comandos.");
+    if (!command.trim() || command.length > 500) throw new Error("Comando GrandMA2 vazio ou acima de 500 caracteres.");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12e3);
+    try {
+      const response = await fetch("http://127.0.0.1:17842/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command }),
+        signal: controller.signal
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || `Ponte GrandMA2 respondeu HTTP ${response.status}.`);
+      const output = String(result.response ?? "");
+      if (!output.trim()) throw new Error("A ponte GrandMA2 não retornou confirmação de resposta.");
+      if (/LOGIN NEEDED|PLEASE LOGIN|ERROR\\s*#|COMMAND NOT EXECUTED/i.test(output)) throw new Error("A GrandMA2 recusou o comando: " + output.slice(0, 300));
+      return output;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw new Error("Tempo limite de 12 segundos aguardando a ponte GrandMA2.");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  async function requestYoutubePlayback(url) {
+    if (youtubePlaybackWaiter) throw new Error("Já existe uma reprodução do YouTube aguardando confirmação.");
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        youtubePlaybackWaiter = void 0;
+        reject(new Error("O player do YouTube não confirmou reprodução em 60 segundos."));
+      }, 6e4);
+      youtubePlaybackWaiter = { resolve: () => {
+        clearTimeout(timer);
+        youtubePlaybackWaiter = void 0;
+        resolve();
+      }, reject: (error) => {
+        clearTimeout(timer);
+        youtubePlaybackWaiter = void 0;
+        reject(error);
+      }, timer };
+      spresenter.ui.postMessage({ type: "open-youtube-url", url });
+    });
   }
   async function runDueSchedules() {
     if (scheduleWatchBusy) return;
@@ -170,7 +228,7 @@
               if (parsed.protocol !== "https:" || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(parsed.hostname)) {
                 throw new Error("Informe um endereço HTTPS válido do YouTube.");
               }
-              spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
+              await requestYoutubePlayback(parsed.href);
             }
           });
         }
@@ -179,7 +237,7 @@
             id: "grandma2",
             label: "Comando GrandMA2",
             execute: async () => {
-              throw new Error("O adaptador de execução GrandMA2 ainda não foi conectado ao motor de automação.");
+              await callGrandmaScheduler(String(schedule.grandmaCommand));
             }
           });
         }
@@ -192,7 +250,7 @@
                 const parts = String(schedule.vmixFunction).split(",").map((part) => part.trim());
                 await callVmix(parts[0], parts[1]);
               }
-              if (schedule.startStream) await callVmix("StartStreaming");
+              if (schedule.startStream) await callVmix("StartStreaming", void 0, true);
             }
           });
         }
@@ -645,6 +703,10 @@
         await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
         await sendState();
         spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
+      } else if (msg.type === "youtube-playback-confirmed") {
+        if (youtubePlaybackWaiter) youtubePlaybackWaiter.resolve();
+      } else if (msg.type === "youtube-playback-failed") {
+        if (youtubePlaybackWaiter) youtubePlaybackWaiter.reject(new Error(String(msg.error || "O player do YouTube informou falha.")));
       } else if (msg.type === "save-managed-devices") {
         const input = Array.isArray(msg.devices) ? msg.devices : [];
         if (input.length > 30) throw new Error("O limite é de 30 equipamentos cadastrados.");
