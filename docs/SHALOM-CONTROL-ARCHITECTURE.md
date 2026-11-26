@@ -96,3 +96,18 @@ Se o processo for encerrado enquanto uma etapa estiver `running`, a próxima ini
 3. Adaptador vMix que consulte XML de estado após cada comando e valide a transição solicitada.
 4. Confirmação de reprodução do YouTube por um player controlado, em vez de considerar a abertura de URL como reprodução.
 5. Testes de integração em rede real, incluindo firewall, CORS, perda de conexão e reinicialização dos agentes.
+
+
+## Fase 3 — adaptadores do agendador
+
+### Integrações conectadas
+
+- **GrandMA2:** o agendador envia o comando configurado à ponte Telnet local em `127.0.0.1:17842/command`, aguarda a resposta e trata respostas de login/comando recusado como falha. A ponte precisa estar configurada e autenticada previamente no painel. O serviço Telnet da mesa continua sendo acessado pela ponte existente.
+- **vMix:** após StartStreaming/StopStreaming, consulta novamente o XML da API e compara `<streaming>` com o estado esperado. Divergência ou ausência do campo pausa a etapa. Comandos vMix genéricos continuam confirmando a resposta HTTP, não um estado semântico específico.
+- **YouTube:** o painel usa o YouTube IFrame Player API. A etapa fica aguardando o evento PLAYING, falha ao receber erro do player e expira após 60 segundos sem confirmação. O vídeo depende de conexão, permissões de incorporação e política de autoplay do navegador; se exigir interação, a automação permanece pausada.
+
+### Ainda pendente para comunicação distribuída completa
+
+- A ponte PowerPoint continua local em `127.0.0.1:17843`. O agente remoto Windows autenticado, seu pareamento e o controle remoto do PowerPoint ainda não foram entregues.
+- A GrandMA2 é comandada pela ponte local já existente; não há agente remoto independente no computador da mesa.
+- Testes de rede, confirmação em hardware e build/compilação ainda precisam ser executados no ambiente Windows da igreja.
