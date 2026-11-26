@@ -361,7 +361,7 @@ export function App() {
 
   useEffect(() => {
     if (!youtubeEmbedUrl) return;
-    const videoId = youtubeEmbedUrl.match(/embed\\/([A-Za-z0-9_-]{11})/)?.[1];
+    const videoId = youtubeEmbedUrl.match(/embed\/([A-Za-z0-9_-]{11})/)?.[1];
     if (!videoId) { setYoutubePlaybackStatus("ID do vídeo inválido."); return; }
     let player: any;
     let cancelled = false;
@@ -408,7 +408,7 @@ export function App() {
       if (m.type === "vmix-test-result") { setVmixStatus(m.success ? m.message : (m.message || "Falha no teste")); }
       if (m.type === "vmix-action-result") { setVmixStatus(m.message); }
       if (m.type === "vmix-status-result") { setVmixStatus(m.message); }
-      if (m.type === "open-youtube-url") { try { const parsed = new URL(String(m.url)); const id = parsed.hostname === "youtu.be" ? parsed.pathname.slice(1) : parsed.searchParams.get("v") || parsed.pathname.match(/\\/embed\\/([^/]+)/)?.[1] || ""; if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error("Não foi possível identificar o vídeo do YouTube."); setYoutubeEmbedUrl("https://www.youtube-nocookie.com/embed/" + id + "?enablejsapi=1&autoplay=1&origin=" + encodeURIComponent(window.location.origin)); setYoutubePlaybackStatus("Player aberto; aguardando confirmação de reprodução."); } catch (e) { setNotice(e instanceof Error ? e.message : "URL do YouTube inválida."); } }
+      if (m.type === "open-youtube-url") { try { const parsed = new URL(String(m.url)); const id = parsed.hostname === "youtu.be" ? parsed.pathname.slice(1) : parsed.searchParams.get("v") || parsed.pathname.match(/\/embed\/([^/]+)/)?.[1] || ""; if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error("Não foi possível identificar o vídeo do YouTube."); setYoutubeEmbedUrl("https://www.youtube-nocookie.com/embed/" + id + "?enablejsapi=1&autoplay=1&origin=" + encodeURIComponent(window.location.origin)); setYoutubePlaybackStatus("Player aberto; aguardando confirmação de reprodução."); } catch (e) { setNotice(e instanceof Error ? e.message : "URL do YouTube inválida."); } }
       if (m.type === "state") {
         setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setManagedDevices(m.managedDevices ?? []); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
