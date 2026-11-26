@@ -360,19 +360,46 @@ export function App() {
 
 
   useEffect(() => {
-    const onYoutubeMessage = (event: MessageEvent) => {
-      if (event.origin !== "https://www.youtube.com" && event.origin !== "https://www.youtube-nocookie.com") return;
-      let data: any;
-      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; } catch { return; }
-      const state = data?.info?.playerState;
-      if (state === 1) setYoutubePlaybackStatus("Reprodução confirmada pelo player do YouTube.");
-      else if (state === 2) setYoutubePlaybackStatus("Vídeo pausado.");
-      else if (state === 0) setYoutubePlaybackStatus("Vídeo concluído.");
-      else if (data?.event === "onError") setYoutubePlaybackStatus("O player informou erro de reprodução.");
+    if (!youtubeEmbedUrl) return;
+    const videoId = youtubeEmbedUrl.match(/embed\\/([A-Za-z0-9_-]{11})/)?.[1];
+    if (!videoId) { setYoutubePlaybackStatus("ID do vídeo inválido."); return; }
+    let player: any;
+    let cancelled = false;
+    const createPlayer = () => {
+      if (cancelled || !(window as any).YT?.Player) return;
+      const target = document.getElementById("shalom-youtube-player");
+      if (!target) return;
+      player = new (window as any).YT.Player(target, {
+        videoId,
+        playerVars: { autoplay: 1, playsinline: 1 },
+        events: {
+          onReady: () => setYoutubePlaybackStatus("Player pronto; solicitando reprodução."),
+          onStateChange: (event: any) => {
+            const states = (window as any).YT.PlayerState;
+            if (event.data === states.PLAYING) setYoutubePlaybackStatus("Reprodução confirmada pelo player do YouTube.");
+            else if (event.data === states.PAUSED) setYoutubePlaybackStatus("Vídeo pausado.");
+            else if (event.data === states.ENDED) setYoutubePlaybackStatus("Vídeo concluído.");
+            else if (event.data === states.BUFFERING) setYoutubePlaybackStatus("Vídeo carregando.");
+          },
+          onError: (event: any) => setYoutubePlaybackStatus("Erro do player do YouTube: " + event.data)
+        }
+      });
     };
-    window.addEventListener("message", onYoutubeMessage);
-    return () => window.removeEventListener("message", onYoutubeMessage);
-  }, []);
+    const win = window as any;
+    if (win.YT?.Player) createPlayer();
+    else {
+      const existing = document.getElementById("youtube-iframe-api");
+      if (!existing) {
+        const script = document.createElement("script");
+        script.id = "youtube-iframe-api";
+        script.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(script);
+      }
+      const prior = win.onYouTubeIframeAPIReady;
+      win.onYouTubeIframeAPIReady = () => { if (typeof prior === "function") prior(); createPlayer(); };
+    }
+    return () => { cancelled = true; try { player?.destroy(); } catch {} };
+  }, [youtubeEmbedUrl]);
 
   useEffect(() => {
     const off = onMessage(raw => {
@@ -968,7 +995,7 @@ export function App() {
       <p className="hint">A seleção da Bíblia nativa é importada após o versículo ser colocado ao vivo. A API pública documentada não expõe leitura direta da lista interna de traduções e versículos.</p>
       <button className="primary" onClick={() => postMessage({ type: "open-bible" })}>Abrir painel Bíblia</button>
     </section></>}
-    {youtubeEmbedUrl && <section className="card"><div className="actions" style={{justifyContent:"space-between"}}><h2>Player do YouTube</h2><button className="ghost" onClick={()=>{setYoutubeEmbedUrl("");setYoutubePlaybackStatus("Player fechado");}}>Fechar player</button></div><p className="hint">{youtubePlaybackStatus}</p><iframe title="Player do YouTube" src={youtubeEmbedUrl} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen style={{width:"100%",aspectRatio:"16 / 9",border:0,borderRadius:12}} /></section>}
+    {youtubeEmbedUrl && <section className="card"><div className="actions" style={{justifyContent:"space-between"}}><h2>Player do YouTube</h2><button className="ghost" onClick={()=>{setYoutubeEmbedUrl("");setYoutubePlaybackStatus("Player fechado");}}>Fechar player</button></div><p className="hint">{youtubePlaybackStatus}</p><div id="shalom-youtube-player" style={{width:"100%",aspectRatio:"16 / 9",borderRadius:12,overflow:"hidden"}} /></section>}
     <footer>SHALOM COMUNIDADE CRISTÃ <span>•</span> v0.4.0</footer>
   </main>;
 }
