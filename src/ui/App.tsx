@@ -376,12 +376,12 @@ export function App() {
           onReady: () => setYoutubePlaybackStatus("Player pronto; solicitando reprodução."),
           onStateChange: (event: any) => {
             const states = (window as any).YT.PlayerState;
-            if (event.data === states.PLAYING) setYoutubePlaybackStatus("Reprodução confirmada pelo player do YouTube.");
+            if (event.data === states.PLAYING) { setYoutubePlaybackStatus("Reprodução confirmada pelo player do YouTube."); postMessage({ type: "youtube-playback-confirmed" }); }
             else if (event.data === states.PAUSED) setYoutubePlaybackStatus("Vídeo pausado.");
             else if (event.data === states.ENDED) setYoutubePlaybackStatus("Vídeo concluído.");
             else if (event.data === states.BUFFERING) setYoutubePlaybackStatus("Vídeo carregando.");
           },
-          onError: (event: any) => setYoutubePlaybackStatus("Erro do player do YouTube: " + event.data)
+          onError: (event: any) => { setYoutubePlaybackStatus("Erro do player do YouTube: " + event.data); postMessage({ type: "youtube-playback-failed", error: "Erro do player do YouTube: " + event.data }); }
         }
       });
     };
