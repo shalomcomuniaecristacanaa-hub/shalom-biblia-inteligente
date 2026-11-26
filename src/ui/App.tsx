@@ -63,6 +63,7 @@ export function App() {
     { id: "as21", name: "AS21 — Almeida Século 21" }
   ];
   const [bibleResult, setBibleResult] = useState<any | null>(null);
+  const [bibleQueue, setBibleQueue] = useState<Array<{id:string;reference:string;text:string;book:string;version:string}>>([]);
   const [bibleStatus, setBibleStatus] = useState("");
   const [songQuery, setSongQuery] = useState("");
   const [songs, setSongs] = useState<any[]>([]);
