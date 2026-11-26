@@ -86,6 +86,8 @@ export function App() {
   const [libraryType, setLibraryType] = useState("all");
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [notice, setNotice] = useState("");
+  const [youtubeEmbedUrl, setYoutubeEmbedUrl] = useState("");
+  const [youtubePlaybackStatus, setYoutubePlaybackStatus] = useState("Aguardando reprodução");
   const [busy, setBusy] = useState(false);
   const [contextVerse, setContextVerse] = useState<string | null>(null);
   const [groupBackgrounds, setGroupBackgrounds] = useState({ Ceia: "", Palavra: "", "Dízimo": "" });
@@ -358,13 +360,28 @@ export function App() {
 
 
   useEffect(() => {
+    const onYoutubeMessage = (event: MessageEvent) => {
+      if (event.origin !== "https://www.youtube.com" && event.origin !== "https://www.youtube-nocookie.com") return;
+      let data: any;
+      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; } catch { return; }
+      const state = data?.info?.playerState;
+      if (state === 1) setYoutubePlaybackStatus("Reprodução confirmada pelo player do YouTube.");
+      else if (state === 2) setYoutubePlaybackStatus("Vídeo pausado.");
+      else if (state === 0) setYoutubePlaybackStatus("Vídeo concluído.");
+      else if (data?.event === "onError") setYoutubePlaybackStatus("O player informou erro de reprodução.");
+    };
+    window.addEventListener("message", onYoutubeMessage);
+    return () => window.removeEventListener("message", onYoutubeMessage);
+  }, []);
+
+  useEffect(() => {
     const off = onMessage(raw => {
       const m = raw as any;
       if (m.type === "managed-device-test-result") { setNotice((m.online ? "Equipamento respondeu" : "Falha no teste") + ": " + (m.name || "dispositivo") + (m.error ? " — " + m.error : " — HTTP " + m.statusCode)); }
       if (m.type === "vmix-test-result") { setVmixStatus(m.success ? m.message : (m.message || "Falha no teste")); }
       if (m.type === "vmix-action-result") { setVmixStatus(m.message); }
       if (m.type === "vmix-status-result") { setVmixStatus(m.message); }
-      if (m.type === "open-youtube-url") { try { const opened = window.open(String(m.url), "_blank", "noopener,noreferrer"); if (!opened) setNotice("O navegador bloqueou a abertura automática do YouTube. Libere pop-ups para o SPresenter ou abra o link manualmente: " + String(m.url)); else setNotice("Solicitada abertura do YouTube no navegador."); } catch { setNotice("Não foi possível abrir o YouTube automaticamente. Link: " + String(m.url)); } }
+      if (m.type === "open-youtube-url") { try { const parsed = new URL(String(m.url)); const id = parsed.hostname === "youtu.be" ? parsed.pathname.slice(1) : parsed.searchParams.get("v") || parsed.pathname.match(/\\/embed\\/([^/]+)/)?.[1] || ""; if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error("Não foi possível identificar o vídeo do YouTube."); setYoutubeEmbedUrl("https://www.youtube-nocookie.com/embed/" + id + "?enablejsapi=1&autoplay=1&origin=" + encodeURIComponent(window.location.origin)); setYoutubePlaybackStatus("Player aberto; aguardando confirmação de reprodução."); } catch (e) { setNotice(e instanceof Error ? e.message : "URL do YouTube inválida."); } }
       if (m.type === "state") {
         setVerses(m.verses ?? []); setOutputs(m.outputs ?? []); setLayers(m.layers ?? []); setEventSchedules(m.eventSchedules ?? []); setConnectionSettings(m.connectionSettings ?? blankConnections()); setManagedDevices(m.managedDevices ?? []); setLightingScenes(m.lightingScenes ?? []); setGroupBackgrounds(m.groupBackgrounds ?? { Ceia: "", Palavra: "", "Dízimo": "" });
         const ls = (m.layers ?? []) as Layer[];
@@ -951,6 +968,7 @@ export function App() {
       <p className="hint">A seleção da Bíblia nativa é importada após o versículo ser colocado ao vivo. A API pública documentada não expõe leitura direta da lista interna de traduções e versículos.</p>
       <button className="primary" onClick={() => postMessage({ type: "open-bible" })}>Abrir painel Bíblia</button>
     </section></>}
+    {youtubeEmbedUrl && <section className="card"><div className="actions" style={{justifyContent:"space-between"}}><h2>Player do YouTube</h2><button className="ghost" onClick={()=>{setYoutubeEmbedUrl("");setYoutubePlaybackStatus("Player fechado");}}>Fechar player</button></div><p className="hint">{youtubePlaybackStatus}</p><iframe title="Player do YouTube" src={youtubeEmbedUrl} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen style={{width:"100%",aspectRatio:"16 / 9",border:0,borderRadius:12}} /></section>}
     <footer>SHALOM COMUNIDADE CRISTÃ <span>•</span> v0.4.0</footer>
   </main>;
 }
