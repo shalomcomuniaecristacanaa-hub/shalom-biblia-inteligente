@@ -715,11 +715,19 @@ export function App() {
         {bibleResult && <div className="preview-card" style={{marginTop:14}}>
           <div className="preview-heading"><div><small>PRÉVIA DO TEXTO BÍBLICO · {bibleVersions.find(v => v.id === bibleVersion)?.id.toUpperCase()}</small><strong>{bibleResult.reference}</strong></div><span>● NÃO ESTÁ AO VIVO</span></div>
           <div className="screen-verse-text" style={{padding:"18px 12px",fontSize:20,lineHeight:1.55}}>{bibleResult.text}</div>
-          <button className="primary wide" disabled={busy} onClick={() => present({id:"",reference:bibleResult.reference,text:bibleResult.text,book:bibleResult.book || "",group:"Geral",background:"",theme:""})}>{busy ? "Enviando..." : "▶ Enviar para os telões"}</button>
+          <button className="primary wide" disabled={bibleQueue.some(item => item.reference === bibleResult.reference && item.version === bibleVersion)} onClick={() => setBibleQueue(items => [...items,{id:"bible-"+Date.now().toString(36),reference:bibleResult.reference,text:bibleResult.text,book:bibleResult.book || "",version:bibleVersion}])}>＋ Adicionar à lista prévia</button>
         </div>}
         {!bibleStatus && !bibleResult && bibleReference.trim() && <p className="hint">Digite uma referência completa, como João 3:16 ou João 3:16-17.</p>}
         <p className="hint">A busca usa a tradução selecionada. As opções são versões oferecidas pela fonte bíblica externa; o SDK do SPresenter não permite consultar automaticamente as traduções instaladas nele. Pesquisar e visualizar nunca altera o conteúdo que está ao vivo.</p>
       </section>
+       <section className="card">
+         <small>LISTA PRÉVIA</small><h2>Versículos preparados · {bibleQueue.length}</h2>
+         {!bibleQueue.length ? <p className="hint">Adicione referências acima para montar a sequência.</p> : bibleQueue.map(item => <div className="verse" key={item.id}>
+           <div className="verse-head"><div><strong>{item.reference}</strong><small>{item.version.toUpperCase()}</small></div><button className="primary" disabled={busy} onClick={() => present({id:"",reference:item.reference,text:item.text,book:item.book,group:"Palavra",background:"",theme:""})}>{busy ? "Enviando..." : "Enviar ao telão"}</button></div>
+           <p>{item.text}</p><button className="ghost" onClick={() => setBibleQueue(items => items.filter(row => row.id !== item.id))}>Remover da lista</button>
+         </div>)}
+         <p className="hint">Cada botão envia somente o versículo daquela linha. O fundo configurado permanece preservado; a lista não envia automaticamente.</p>
+       </section>
       <section className="card">
         <small>BIBLIOTECA DO SPRESENTER</small><h2>Louvores cadastrados</h2>
         <label>Buscar música<input value={songQuery} onChange={e => setSongQuery(e.target.value)} placeholder="Digite o nome do louvor..." onKeyDown={e => { if (e.key === "Enter" && songQuery.trim()) { setSearchingSongs(true); setSongSearchStatus("Consultando a biblioteca do SPresenter…"); setSongSearchSource(""); postMessage({ type: "search-songs", query: songQuery.trim() }); } }} /></label>
