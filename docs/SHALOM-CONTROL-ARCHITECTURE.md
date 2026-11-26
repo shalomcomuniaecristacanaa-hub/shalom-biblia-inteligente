@@ -57,9 +57,7 @@ Se o processo for encerrado enquanto uma etapa estiver `running`, a próxima ini
 
 ### Limitações ainda abertas na fase 1
 
-- GrandMA2 ainda não possui adaptador de execução conectado ao agendador; uma etapa GrandMA2 configurada pausa com erro explícito em vez de fingir sucesso.
-- A abertura do YouTube é entregue à interface; isso confirma o encaminhamento do pedido, não a reprodução efetiva do vídeo.
-- A API vMix responde ao comando HTTP, mas a confirmação do estado real de cada ação será reforçada no adaptador específico.
+- Situação atualizada na Fase 3: GrandMA2, vMix Start/Stop e YouTube possuem adaptadores descritos abaixo. Consulte as limitações específicas antes de operar.
 - Ainda não foi possível executar build ou ensaio com equipamentos reais nesta etapa.
 
 ## Próximas entregas
@@ -111,3 +109,28 @@ Se o processo for encerrado enquanto uma etapa estiver `running`, a próxima ini
 - A ponte PowerPoint continua local em `127.0.0.1:17843`. O agente remoto Windows autenticado, seu pareamento e o controle remoto do PowerPoint ainda não foram entregues.
 - A GrandMA2 é comandada pela ponte local já existente; não há agente remoto independente no computador da mesa.
 - Testes de rede, confirmação em hardware e build/compilação ainda precisam ser executados no ambiente Windows da igreja.
+
+
+## Fechamento técnico e prontidão operacional
+
+### Entregue no repositório
+- Núcleo sequencial com diário/checkpoints, pausa por falha e retomada explícita.
+- Cadastro e teste de saúde de dispositivos em IPv4 privado.
+- Adaptador de agendamento GrandMA2 pela ponte local existente.
+- Confirmação do estado de streaming do vMix após Start/Stop.
+- Player YouTube incorporado que aguarda confirmação PLAYING ou erro/timeout.
+- Ponte PowerPoint local com comandos de apresentação e inicialização automática opcional.
+
+### Não declarar como concluído
+- **Controle PowerPoint entre computadores:** ainda não existe agente Windows remoto autenticado/pareado. A ponte continua vinculada a 127.0.0.1:17843; não a exponha na LAN.
+- **GrandMA2 distribuída:** o agendador depende da ponte local em 127.0.0.1:17842, não de um agente remoto no computador da mesa.
+- **Validação de campo:** build, testes automatizados, ensaio de rede e testes com os equipamentos reais ainda não foram executados/confirmados.
+
+### Critérios para liberar em culto
+1. Executar build e testes automatizados no ambiente do projeto.
+2. Testar cada adaptador com os equipamentos reais e registrar respostas/estados.
+3. Simular desconexão, timeout e reinicialização; confirmar pausa sem disparo das etapas seguintes.
+4. Validar firewall, endereços fixos/reservas DHCP e permissões de API.
+5. Só então habilitar agendamentos automáticos em produção; manter operador disponível para confirmar retomadas.
+
+**Conclusão:** as integrações de agendamento disponíveis no host atual estão conectadas no código, mas a comunicação distribuída completa e a validação operacional continuam pendentes. Esta documentação não certifica prontidão para uso ao vivo.
