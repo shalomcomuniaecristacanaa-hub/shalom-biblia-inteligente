@@ -18,6 +18,7 @@ let bibleWatchConfig = { output: "0", captureLayer: 0 };
 let lastBibleSnapshot = "";
 let scheduleWatchTimer: ReturnType<typeof setInterval> | undefined;
 let scheduleWatchBusy = false;
+let youtubePlaybackWaiter: { resolve: (value: void) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | undefined;
 
 
 async function callVmix(functionName: string, input?: string, expectedStreaming?: boolean) {
@@ -74,6 +75,18 @@ async function callGrandmaScheduler(command: string): Promise<string> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function requestYoutubePlayback(url: string): Promise<void> {
+  if (youtubePlaybackWaiter) throw new Error("Já existe uma reprodução do YouTube aguardando confirmação.");
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      youtubePlaybackWaiter = undefined;
+      reject(new Error("O player do YouTube não confirmou reprodução em 60 segundos."));
+    }, 60000);
+    youtubePlaybackWaiter = { resolve: () => { clearTimeout(timer); youtubePlaybackWaiter = undefined; resolve(); }, reject: error => { clearTimeout(timer); youtubePlaybackWaiter = undefined; reject(error); }, timer };
+    spresenter.ui.postMessage({ type: "open-youtube-url", url });
+  });
 }
 
 async function runDueSchedules() {
@@ -138,8 +151,7 @@ async function runDueSchedules() {
             if (parsed.protocol !== "https:" || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(parsed.hostname)) {
               throw new Error("Informe um endereço HTTPS válido do YouTube.");
             }
-            // This confirms that the request was handed to the UI, not that a browser completed playback.
-            spresenter.ui.postMessage({ type: "open-youtube-url", url: parsed.href });
+            await requestYoutubePlayback(parsed.href);
           }
         });
       }
@@ -634,6 +646,10 @@ spresenter.ui.onmessage = async (raw: unknown) => {
       await spresenter.storage.set(CONNECTION_SETTINGS_KEY, normalized);
       await sendState();
       spresenter.ui.postMessage({ type: "notice", message: "Endereços de rede salvos." });
+    } else if (msg.type === "youtube-playback-confirmed") {
+      if (youtubePlaybackWaiter) youtubePlaybackWaiter.resolve();
+    } else if (msg.type === "youtube-playback-failed") {
+      if (youtubePlaybackWaiter) youtubePlaybackWaiter.reject(new Error(String(msg.error || "O player do YouTube informou falha.")));
     } else if (msg.type === "save-managed-devices") {
       const input = Array.isArray(msg.devices) ? msg.devices : [];
       if (input.length > 30) throw new Error("O limite é de 30 equipamentos cadastrados.");
