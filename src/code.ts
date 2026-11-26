@@ -41,7 +41,7 @@ async function callVmix(functionName: string, input?: string, expectedStreaming?
   const body = await request(functionName, input);
   if (expectedStreaming !== undefined) {
     const statusXml = await request();
-    const match = statusXml.match(/<streaming>(true|false)<\\/streaming>/i);
+    const match = statusXml.match(/<streaming>(true|false)<\/streaming>/i);
     if (!match) throw new Error("Comando aceito, mas o XML do vMix não informou o estado de streaming.");
     const actual = match[1].toLowerCase() === "true";
     if (actual !== expectedStreaming) throw new Error(`O vMix respondeu, mas o streaming continua ${actual ? "ativo" : "parado"}; esperado: ${expectedStreaming ? "ativo" : "parado"}.`);
