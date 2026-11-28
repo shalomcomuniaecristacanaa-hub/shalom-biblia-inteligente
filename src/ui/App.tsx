@@ -333,37 +333,64 @@ export function App() {
         commands.push("Group "+item.maGroup+" At Preset 2."+positionPreset);
       }
     }
+    const hasErrors = (value:string) => /Error\s*#\s*\d+|UNKNOWN COMMAND|SYNTAX ERROR|ILLEGAL COMMAND|OBJECT DOES NOT EXIST/i.test(value);
     try {
-      setGrandmaBridgeStatus("Verificando Sequence "+sequence+" e preparando "+commands.length+" comandos de iluminação...");
+      setGrandmaBridgeStatus("Verificando Sequence "+sequence+" e Cue 1 antes de preparar "+commands.length+" comandos...");
       const check = await bridgeRequest("/command",{command:"List Sequence "+sequence});
       const checkText = String(check.response || "");
-      if (!/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(checkText)) {
-        setGrandmaResponse(checkText);
-        setGrandmaBridgeStatus("A Sequence "+sequence+" já existe ou não foi possível confirmar que está livre. Nada foi enviado.");
-        return;
+      const sequenceExists = !/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(checkText);
+      let cueExists = false;
+      let cueText = "";
+      if (sequenceExists) {
+        const cueCheck = await bridgeRequest("/command",{command:"List Cue 1 Sequence "+sequence});
+        cueText = String(cueCheck.response || "");
+        if (hasErrors(cueText)) throw new Error("Não foi possível consultar o Cue 1: "+cueText);
+        cueExists = !/NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(cueText);
       }
-      const dynamic = scene.groups.filter(group=>group.colorBehavior!=="static" || group.strobe>0 || (group.movement!=="fixed" && !Number.isInteger(Number(group.grandmaPositionPreset))));
-      const dynamicNote = dynamic.length ? "\n\nAtenção: onda/ciclo/pulso/perseguição e estrobo da prévia ainda exigem efeitos/macros MA2. Movimento só será aplicado quando houver um preset Position da mesa informado no grupo. A cor RGB exige aparelhos com atributos ColorRGB; fixtures com roda de cor precisam de preset Color já cadastrado na mesa." : "";
       if (grandmaPendingLightingSceneId !== scene.id) {
         setGrandmaPendingLightingSceneId(scene.id);
-        setGrandmaBridgeStatus("Revise a confirmação exibida abaixo e clique novamente para enviar.");
+        setGrandmaResponse(sequenceExists ? checkText+"\n\n"+(cueExists ? cueText : "Cue 1 ainda não existe nesta Sequence.") : checkText);
+        setGrandmaBridgeStatus(cueExists
+          ? "A Sequence "+sequence+" já tem Cue 1. Confirme abaixo para substituí-lo pela cena selecionada e colocá-la no ar."
+          : "Revise a confirmação abaixo. A cena será gravada no Cue 1 e executada automaticamente.");
         return;
       }
       setGrandmaPendingLightingSceneId("");
-;
       const replies:string[] = [];
       for (const command of commands) {
         const result = await bridgeRequest("/command",{command});
-        replies.push("> "+command+"\n"+String(result.response || "Comando aceito; sem texto de retorno."));
+        const response = String(result.response || "");
+        replies.push("> "+command+"\n"+(response || "Comando aceito; sem texto de retorno."));
+        if (hasErrors(response)) throw new Error("A GrandMA2 recusou um comando de iluminação. A sequência foi interrompida para evitar gravação incompleta.\n"+replies.join("\n\n"));
       }
-      const store = await bridgeRequest("/command",{command:"Store Cue 1 Sequence "+sequence});
-      replies.push("> Store Cue 1 Sequence "+sequence+"\n"+String(store.response || "Comando enviado."));
-      const label = await bridgeRequest("/command",{command:'Label Sequence '+sequence+' "'+String(scene.name).replace(/["\\r\\n]/g,"").slice(0,48)+'"'});
-      replies.push("> Label Sequence "+sequence+"\n"+String(label.response || "Nome enviado."));
+      const storeCommand = "Store Cue 1 Sequence "+sequence+" /overwrite /noconfirm";
+      const store = await bridgeRequest("/command",{command:storeCommand});
+      const storeText = String(store.response || "");
+      replies.push("> "+storeCommand+"\n"+(storeText || "Comando de gravação enviado."));
+      if (hasErrors(storeText)) throw new Error("A GrandMA2 recusou a gravação do Cue 1. Go não será executado.\n"+replies.join("\n\n"));
+      const verify = await bridgeRequest("/command",{command:"List Cue 1 Sequence "+sequence});
+      const verifyText = String(verify.response || "");
+      replies.push("> List Cue 1 Sequence "+sequence+"\n"+(verifyText || "Sem retorno."));
+      if (hasErrors(verifyText) || /NO OBJECTS FOUND|NO OBJECTS|nenhum objeto/i.test(verifyText)) {
+        throw new Error("Não consegui confirmar o Cue 1 depois da gravação. Go não será executado.\n"+replies.join("\n\n"));
+      }
+      const cleanName = String(scene.name).replace(/["\r\n]/g,"").slice(0,48);
+      const label = await bridgeRequest("/command",{command:'Label Sequence '+sequence+' "'+cleanName+'"'});
+      const labelText = String(label.response || "");
+      replies.push("> Label Sequence "+sequence+"\n"+(labelText || "Nome atualizado."));
+      if (hasErrors(labelText)) throw new Error("Cue gravado, mas não foi possível atualizar o nome da Sequence. Go não foi executado.\n"+replies.join("\n\n"));
+      const goCommand = "Go Sequence "+sequence;
+      const go = await bridgeRequest("/command",{command:goCommand});
+      const goText = String(go.response || "");
+      replies.push("> "+goCommand+"\n"+(goText || "Comando Go enviado."));
+      if (hasErrors(goText)) throw new Error("O Cue foi gravado, mas a GrandMA2 recusou o Go.\n"+replies.join("\n\n"));
+      const dynamic = scene.groups.filter(group=>group.colorBehavior!=="static" || group.strobe>0 || (group.movement!=="fixed" && !Number.isInteger(Number(group.grandmaPositionPreset))));
+      const dynamicNote = dynamic.length ? " Observação: efeitos dinâmicos/estrobo ainda dependem de efeitos ou macros programados na GrandMA2; RGB depende de aparelhos com atributos ColorRGB e movimento depende de preset Position configurado." : "";
       setGrandmaResponse(replies.join("\n\n"));
-      setGrandmaBridgeStatus("Cena \""+scene.name+"\" transferida para o Programmer e cadastro enviado à Sequence "+sequence+". Confira na GrandMA2; nenhum Go foi executado.");
-      await readGrandmaCatalog();
-    } catch (e) { setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e)); }
+      setGrandmaBridgeStatus("Go enviado e aceito pela GrandMA2 para a Sequence "+sequence+". Confira visualmente os refletores para confirmar a saída física."+dynamicNote);
+    } catch (e) {
+      setGrandmaBridgeStatus(e instanceof Error ? e.message : String(e));
+    }
   };
 
 
@@ -998,7 +1025,7 @@ export function App() {
           </>}
           <p className="hint">Para obter o XML, use a função de exportação XML da GrandMA2 e escolha os objetos desejados. Arquivos .show completos, binários ou pacotes ZIP ainda precisam de um conversor específico; não serão tratados como XML.</p>
         </div>
-        <div className="scheduler-section"><h3>Enviar uma cena salva do Estúdio de Iluminação</h3><p className="hint">Selecione uma cena já montada no plugin. Os grupos precisam ter o número correspondente de Group na GrandMA2 configurado no Estúdio. A transferência aplica intensidade e cor no Programmer e grava uma Cue 1 em uma Sequence nova.</p><label>Cena salva<select value={grandmaSelectedLightingSceneId} onChange={e=>{setGrandmaSelectedLightingSceneId(e.target.value);const selected=lightingScenes.find(scene=>scene.id===e.target.value);if(selected){setGrandmaSceneName(selected.name);}}}><option value="">Selecione uma cena...</option>{lightingScenes.map(scene=><option key={scene.id} value={scene.id}>{scene.name}</option>)}</select></label><label>Número da Sequence para gravar<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric"/></label><button className="primary" disabled={!lightingScenes.length} onClick={sendSavedLightingSceneToGrandma}>{grandmaPendingLightingSceneId===grandmaSelectedLightingSceneId && grandmaSelectedLightingSceneId ? "Confirmar envio para GrandMA2" : "Enviar cena selecionada para GrandMA2"}</button>{grandmaPendingLightingSceneId===grandmaSelectedLightingSceneId && grandmaSelectedLightingSceneId && <div className="importbox"><strong>Confirme o envio</strong><p>Será aplicado no Programmer nos grupos configurados e gravado como Cue 1 da Sequence {grandmaSequenceNumber}. Confira o mapeamento e a mesa antes de continuar. Nenhum Go será executado.</p><button className="ghost" onClick={()=>{setGrandmaPendingLightingSceneId("");setGrandmaBridgeStatus("Envio cancelado.");}}>Cancelar</button></div>}<p className="hint">A prévia do plugin é apenas uma simulação. Movimento, onda, ciclo, pulso, perseguição e estrobo ainda exigem programação de efeitos/presets na GrandMA2; não serão simulados como se já estivessem programados.</p></div><div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
+        <div className="scheduler-section"><h3>Enviar uma cena salva do Estúdio de Iluminação</h3><p className="hint">Selecione uma cena já montada no plugin. Os grupos precisam ter o número correspondente de Group na GrandMA2 configurado no Estúdio. A transferência aplica intensidade e cor no Programmer e grava uma Cue 1 em uma Sequence nova.</p><label>Cena salva<select value={grandmaSelectedLightingSceneId} onChange={e=>{setGrandmaSelectedLightingSceneId(e.target.value);const selected=lightingScenes.find(scene=>scene.id===e.target.value);if(selected){setGrandmaSceneName(selected.name);}}}><option value="">Selecione uma cena...</option>{lightingScenes.map(scene=><option key={scene.id} value={scene.id}>{scene.name}</option>)}</select></label><label>Número da Sequence para gravar<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric"/></label><button className="primary" disabled={!lightingScenes.length} onClick={sendSavedLightingSceneToGrandma}>{grandmaPendingLightingSceneId===grandmaSelectedLightingSceneId && grandmaSelectedLightingSceneId ? "CONFIRMAR E COLOCAR NO AR" : "COLOCAR CENA NO AR"}</button>{grandmaPendingLightingSceneId===grandmaSelectedLightingSceneId && grandmaSelectedLightingSceneId && <div className="importbox"><strong>Confirme a execução ao vivo</strong><p>A cena será aplicada aos grupos configurados, gravada no Cue 1 da Sequence {grandmaSequenceNumber} e executada imediatamente. Se o Cue 1 já existir, ele será substituído. Isso pode alterar os refletores ao vivo.</p><button className="ghost" onClick={()=>{setGrandmaPendingLightingSceneId("");setGrandmaBridgeStatus("Execução cancelada.");}}>Cancelar</button></div>}<p className="hint">A prévia do plugin é apenas uma simulação. Movimento, onda, ciclo, pulso, perseguição e estrobo ainda exigem programação de efeitos/presets na GrandMA2; não serão simulados como se já estivessem programados.</p></div><div className="scheduler-section"><h3>Cadastrar cena e preset na GrandMA2</h3><p className="hint">Prepare os aparelhos e valores no Programmer. O plugin consulta os endereços antes de gravar. Não executa Go nem coloca a cena no ar.</p><label>Número da Sequence<input value={grandmaSequenceNumber} onChange={e=>setGrandmaSequenceNumber(e.target.value)} inputMode="numeric" /></label><label>Nome da cena / preset<input value={grandmaSceneName} onChange={e=>setGrandmaSceneName(e.target.value)} /></label><label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={grandmaSavePreset} onChange={e=>setGrandmaSavePreset(e.target.checked)} /> Cadastrar também um preset</label>{grandmaSavePreset && <div className="twocol"><label>Tipo de preset<select value={grandmaPresetType} onChange={e=>setGrandmaPresetType(e.target.value)}><option value="1">1 · Dimmer</option><option value="2">2 · Position</option><option value="3">3 · Gobo</option><option value="4">4 · Color</option><option value="5">5 · Beam</option><option value="6">6 · Focus</option><option value="7">7 · Shapers</option><option value="8">8 · Video</option><option value="9">9 · Control</option><option value="10">10 · Sound</option><option value="11">11 · Media</option><option value="12">12 · 3D</option></select></label><label>Número do preset<input value={grandmaPresetNumber} onChange={e=>setGrandmaPresetNumber(e.target.value)} inputMode="numeric" /></label></div>}<button className="primary" onClick={createGrandmaScene}>Verificar e cadastrar na GrandMA2</button></div>
       </details>
       <p className="hint">Esses endereços ficam salvos no armazenamento do plugin. Ainda será necessário configurar/validar a comunicação entre as redes; cadastrar o IP não cria rota de rede automaticamente.</p>
     </section>
