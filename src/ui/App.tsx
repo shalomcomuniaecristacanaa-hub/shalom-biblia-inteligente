@@ -324,10 +324,13 @@ export function App() {
       const r = Math.round(parseInt(hex.slice(0,2),16)/255*100);
       const g = Math.round(parseInt(hex.slice(2,4),16)/255*100);
       const b = Math.round(parseInt(hex.slice(4,6),16)/255*100);
-      commands.push("Group "+item.maGroup+" At Dimmer "+Math.max(0,Math.min(100,Math.round(item.group.intensity))));
-      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB1" At '+r);
-      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB2" At '+g);
-      commands.push('Group '+item.maGroup+' At Attribute "ColorRGB3" At '+b);
+      // grandMA2: selecione o grupo e aplique o atributo explicitamente.
+      // "Dim" é o nome de biblioteca usual do atributo de intensidade; RGB
+      // usa os três atributos separados quando disponíveis no perfil do fixture.
+      commands.push('Group '+item.maGroup+' Attribute "Dim" At '+Math.max(0,Math.min(100,Math.round(item.group.intensity))));
+      commands.push('Group '+item.maGroup+' Attribute "ColorRGB1" At '+r);
+      commands.push('Group '+item.maGroup+' Attribute "ColorRGB2" At '+g);
+      commands.push('Group '+item.maGroup+' Attribute "ColorRGB3" At '+b);
       const positionPreset = Number(item.group.grandmaPositionPreset);
       if (item.group.movement !== "fixed" && Number.isInteger(positionPreset) && positionPreset > 0 && positionPreset <= 9999) {
         commands.push("Group "+item.maGroup+" At Preset 2."+positionPreset);
