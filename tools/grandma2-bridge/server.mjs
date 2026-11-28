@@ -65,7 +65,7 @@ function onData(chunk) {
   const text = cleanTelnet(chunk).replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "");
   if (!text) return;
   buffer = (buffer + text).slice(-131072);
-  const promptSeen = /\[(?:Channel|Group)\]>\s*$/i.test(buffer);
+  const promptSeen = /\[(?:Root|Channel|Group)\]>\s*$/i.test(buffer);
 
   if (!loggedIn) {
     if (/(login\s+incorrect|incorrect\s+login|wrong password|login failed|access denied)/i.test(buffer)) {
@@ -105,7 +105,7 @@ function onData(chunk) {
 
   if (promptSeen && pending.length) {
     const p = pending.shift();
-    const response = buffer.replace(/\[(?:Channel|Group)\]>\s*$/i, "").trim();
+    const response = buffer.replace(/\[(?:Root|Channel|Group)\]>\s*$/i, "").trim();
     buffer = "";
     lastError = "";
     p.resolve(response);
