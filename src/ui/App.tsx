@@ -9,10 +9,10 @@ type ManagedDevice = { id: string; name: string; kind: "vmix" | "agent" | "other
 type LightingGroup = { id: string; name: string; intensity: number; color: string; movement: string; colorBehavior: string; speed: number; strobe: number; grandmaGroup?: string; grandmaPositionPreset?: string };
 type LightingScene = { id: string; name: string; preset: string; transition: number; groups: LightingGroup[] };
 const defaultLightingGroups = (): LightingGroup[] => [
-  { id: "front", name: "Frente", intensity: 100, color: "#ffffff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
-  { id: "back", name: "Contra", intensity: 70, color: "#2878ff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
-  { id: "moving", name: "Moving Heads", intensity: 50, color: "#8b35e8", movement: "sweep", colorBehavior: "static", speed: 45, strobe: 0 },
-  { id: "led", name: "Painel LED", intensity: 80, color: "#15d6dc", movement: "fixed", colorBehavior: "wave", speed: 45, strobe: 0 }
+  { id: "front", name: "Par LED frente", grandmaGroup: "2", intensity: 100, color: "#ffffff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
+  { id: "back", name: "Par LED contra", grandmaGroup: "1", intensity: 70, color: "#2878ff", movement: "fixed", colorBehavior: "static", speed: 30, strobe: 0 },
+  { id: "moving", name: "Moving", grandmaGroup: "3", intensity: 50, color: "#8b35e8", movement: "sweep", colorBehavior: "static", speed: 45, strobe: 0 },
+  { id: "wash", name: "Wash Calegari", grandmaGroup: "8", intensity: 80, color: "#15d6dc", movement: "fixed", colorBehavior: "static", speed: 45, strobe: 0 }
 ];
 const lightingPresets = [
   { id: "wave", name: "Onda LED", description: "Cores percorrem os LEDs em sequência", movement: "fixed", colorBehavior: "wave", color: "#168cff" },
