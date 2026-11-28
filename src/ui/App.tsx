@@ -1013,7 +1013,7 @@ export function App() {
         </label>
         <button className="ghost" onClick={sendGrandmaCommand} disabled={!grandmaCommand.trim()}>Enviar comando</button>
         {grandmaResponse && <pre className="importbox" style={{whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto"}}>{grandmaResponse}</pre>}
-        <p className="hint">Use inicialmente apenas comandos de consulta, como List Group Thru 10. Não execute comandos de iluminação ao vivo antes de validar a conexão.</p>
+        <p className="hint">Este campo é para consultas e diagnóstico (por exemplo, List Group Thru 10). Para colocar uma cena ao vivo, selecione-a no Estúdio e use o botão COLOCAR CENA NO AR, que solicita confirmação, grava o Cue 1 e envia Go pela ponte Telnet.</p>
         
         <div className="scheduler-section"><h3>Biblioteca da GrandMA2</h3><p className="hint">Consulta o show carregado na mesa. Os resultados são exibidos abaixo; a quantidade depende dos objetos existentes e das permissões do usuário.</p><button className="ghost" disabled={grandmaCatalogLoading} onClick={readGrandmaCatalog}>{grandmaCatalogLoading ? "Lendo show..." : "↻ Ler grupos, 12 tipos de preset, cenas e macros"}</button>{grandmaCatalog.map(item=><div className="importbox" key={item.name}><strong>{item.name}</strong><pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{item.response}</pre></div>)}</div>
         <div className="scheduler-section"><h3>Importar biblioteca / XML da GrandMA2</h3>
